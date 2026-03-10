@@ -1,0 +1,7 @@
+{
+  "name": "Remix: Remix: Remix: Remix: Missão Platform",
+  "description": "SaaS platform for organizational management, community coordination, and political operations for the Missão movement.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

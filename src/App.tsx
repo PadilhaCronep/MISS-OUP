@@ -9,12 +9,15 @@ const Dashboard = lazy(() => import('./pages/Dashboard.tsx').then((m) => ({ defa
 const MapPage = lazy(() => import('./pages/Map.tsx').then((m) => ({ default: m.MapPage })));
 const BadgesPage = lazy(() => import('./pages/Badges.tsx').then((m) => ({ default: m.BadgesPage })));
 const AdminAccess = lazy(() => import('./pages/AdminAccess.tsx').then((m) => ({ default: m.AdminAccess })));
+const EngajamentoHub = lazy(() => import('./pages/EngajamentoHub.tsx').then((m) => ({ default: m.EngajamentoHub })));
+const GuiaInicial = lazy(() => import('./pages/GuiaInicial.tsx').then((m) => ({ default: m.GuiaInicial })));
 
 const TrainingHub = lazy(() => import('./pages/voluntario/formacao/Hub.tsx').then((m) => ({ default: m.TrainingHub })));
 const TrackDetails = lazy(() => import('./pages/voluntario/formacao/TrackDetails.tsx').then((m) => ({ default: m.TrackDetails })));
 const ModulePlayer = lazy(() => import('./pages/voluntario/formacao/ModulePlayer.tsx').then((m) => ({ default: m.ModulePlayer })));
 const Certificates = lazy(() => import('./pages/voluntario/formacao/Certificates.tsx').then((m) => ({ default: m.Certificates })));
 const MinhaFuncao = lazy(() => import('./pages/voluntario/MinhaFuncao.tsx').then((m) => ({ default: m.MinhaFuncao })));
+const CampaignHub = lazy(() => import('./pages/voluntario/CampaignHub.tsx').then((m) => ({ default: m.CampaignHub })));
 
 const CoordinatorLayout = lazy(() => import('./pages/coordinator/CoordinatorLayout.tsx').then((m) => ({ default: m.CoordinatorLayout })));
 const CoordinatorDashboard = lazy(() => import('./pages/coordinator/Dashboard.tsx').then((m) => ({ default: m.CoordinatorDashboard })));
@@ -43,7 +46,7 @@ const ProtectedRoute = ({ children, roles }: { children: React.ReactNode; roles?
 };
 
 export default function App() {
-  const coordinatorRoles = ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN'];
+  const coordinatorRoles = ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'];
 
   return (
     <AuthProvider>
@@ -54,7 +57,10 @@ export default function App() {
             <Routes>
               <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/acesso-admin" element={<AdminAccess />} />
-              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/engajamento" element={<ProtectedRoute><EngajamentoHub /></ProtectedRoute>} />
+              <Route path="/guia-inicial" element={<ProtectedRoute><GuiaInicial /></ProtectedRoute>} />
               <Route path="/map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
               <Route path="/badges" element={<ProtectedRoute><BadgesPage /></ProtectedRoute>} />
 
@@ -66,6 +72,8 @@ export default function App() {
               />
               <Route path="/voluntario/formacao/certificados" element={<ProtectedRoute><Certificates /></ProtectedRoute>} />
               <Route path="/voluntario/funcao" element={<ProtectedRoute><MinhaFuncao /></ProtectedRoute>} />
+              <Route path="/voluntario/campanhas" element={<ProtectedRoute><CampaignHub /></ProtectedRoute>} />
+              <Route path="/campaign/:id" element={<ProtectedRoute><CampaignDetails /></ProtectedRoute>} />
 
               <Route
                 path="/coordinator"
@@ -187,3 +195,4 @@ export default function App() {
     </AuthProvider>
   );
 }
+

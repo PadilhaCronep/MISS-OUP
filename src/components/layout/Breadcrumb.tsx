@@ -11,6 +11,8 @@ const labelMap: Record<string, string> = {
   onboarding: 'Onboarding',
   'acesso-admin': 'Acesso Admin',
   map: 'Mapa',
+  engajamento: 'Engajamento',
+  'guia-inicial': 'Guia Inicial',
   badges: 'Conquistas',
   voluntario: 'Voluntario',
   formacao: 'Formacao',
@@ -44,6 +46,7 @@ export const Breadcrumb: React.FC = () => {
     return null;
   }
 
+  const isCoordinator = pathname.startsWith('/coordinator');
   const segments = pathname.split('/').filter(Boolean);
   const items: BreadcrumbItem[] = segments.map((segment, index) => ({
     label: toLabel(segment),
@@ -51,16 +54,24 @@ export const Breadcrumb: React.FC = () => {
   }));
 
   return (
-    <nav aria-label="Localizacao" className="flex items-center gap-2 text-xs text-zinc-400 mb-6 flex-wrap">
+    <nav
+      aria-label="Localizacao"
+      className={`mb-5 flex items-center gap-2 overflow-x-auto text-xs whitespace-nowrap ${
+        isCoordinator ? 'text-zinc-500' : 'text-zinc-500'
+      }`}
+    >
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
         return (
           <React.Fragment key={item.path}>
-            {index > 0 ? <ChevronRight className="w-3 h-3 text-zinc-500" /> : null}
+            {index > 0 ? <ChevronRight className="h-3 w-3 text-zinc-500" /> : null}
             {isLast ? (
-              <span className="text-white font-semibold">{item.label}</span>
+              <span className={isCoordinator ? 'font-semibold text-white' : 'font-semibold text-zinc-900'}>{item.label}</span>
             ) : (
-              <Link to={item.path} className="hover:text-[#F5C400] transition-colors">
+              <Link
+                to={item.path}
+                className={isCoordinator ? 'transition-colors hover:text-[#F5C400]' : 'transition-colors hover:text-zinc-900'}
+              >
                 {item.label}
               </Link>
             )}
@@ -70,4 +81,3 @@ export const Breadcrumb: React.FC = () => {
     </nav>
   );
 };
-

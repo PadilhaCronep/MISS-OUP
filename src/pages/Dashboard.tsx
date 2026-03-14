@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../components/AuthContext.tsx';
-import { motion, AnimatePresence } from 'motion/react';
-import { Target, Zap, Users, Trophy, Flame, Clock, CheckCircle2, AlertCircle, X, Upload, MapPin, GraduationCap, ArrowRight } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Target, Zap, Users, Trophy, Flame, Clock, CheckCircle2, X, Upload, GraduationCap, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
@@ -19,348 +19,419 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (user) {
       fetch(`/api/users/${user.id}/stats`)
-        .then(res => res.json())
-        .then(data => setStats(data));
-      
-      fetch('/api/missions')
-        .then(res => res.json())
-        .then(data => setMissions(data.missions));
+        .then((res) => res.json())
+        .then((data) => setStats(data));
 
-      fetch(`/api/formacao/trilhas?volunteerId=${user.id}`)
-        .then(res => res.json())
-        .then(data => setTrainingTracks(data));
+      fetch('/api/missions')
+        .then((res) => res.json())
+        .then((data) => setMissions(data.missions));
+
+      fetch('/api/formacao/trilhas')
+        .then((res) => res.json())
+        .then((data) => setTrainingTracks(data));
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!selectedMission) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedMission]);
 
   const handleSubmitEvidence = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMission) return;
-    
+
     setIsSubmitting(true);
     try {
       const res = await fetch(`/api/missions/${selectedMission.id}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          volunteer_id: user?.id,
           evidence_content: evidenceContent,
-          evidence_url: selectedMission.evidence_type === 'PHOTO' ? 'https://example.com/photo.jpg' : null
-        })
+          evidence_url: selectedMission.evidence_type === 'PHOTO' ? 'https://example.com/photo.jpg' : null,
+        }),
       });
+
       if (res.ok) {
-        alert('Missão enviada com sucesso!');
+        alert('Missao enviada com sucesso!');
         setSelectedMission(null);
         setEvidenceContent('');
-        // Refresh stats
+
         fetch(`/api/users/${user?.id}/stats`)
-          .then(res => res.json())
-          .then(data => setStats(data));
+          .then((result) => result.json())
+          .then((data) => setStats(data));
       }
-    } catch (error) {
-      alert('Erro ao enviar missão.');
+    } catch {
+      alert('Erro ao enviar missao.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (!stats) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F5C400]"></div></div>;
+  const filterOptions = useMemo(() => {
+    const dynamicTypes = Array.from(
+      new Set(
+        missions
+          .map((mission) => String(mission?.type ?? '').trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    );
+    return ['ALL', ...dynamicTypes];
+  }, [missions]);
 
-  const filteredMissions = filter === 'ALL' ? missions : missions.filter(m => m.type === filter);
+  const filteredMissions = useMemo(
+    () => (filter === 'ALL' ? missions : missions.filter((mission) => String(mission?.type ?? '').toUpperCase() === filter)),
+    [filter, missions],
+  );
+
+  const getFilterLabel = (value: string) => {
+    switch (value) {
+      case 'ALL':
+        return 'Todas';
+      case 'DIGITAL':
+        return 'Digital';
+      case 'TERRITORIAL':
+        return 'Territorial';
+      case 'RECRUITMENT':
+      case 'RECRUTAMENTO':
+        return 'Recrutamento';
+      case 'TRAINING':
+      case 'FORMACAO':
+        return 'Formacao';
+      default:
+        return value;
+    }
+  };
 
   const getUrgencyColor = (urgency: string) => {
-    switch (urgency) {
-      case 'URGENTE': return 'border-red-500 bg-red-50 text-red-700';
-      case 'PRIORITARIA': return 'border-yellow-500 bg-yellow-50 text-yellow-700';
-      default: return 'border-green-500 bg-green-50 text-green-700';
+    const normalized = String(urgency ?? '').toUpperCase();
+    switch (normalized) {
+      case 'URGENTE':
+      case 'URGENT':
+        return 'border-red-500 bg-red-50 text-red-700';
+      case 'PRIORITARIA':
+      case 'PRIORITY':
+        return 'border-yellow-500 bg-yellow-50 text-yellow-700';
+      default:
+        return 'border-emerald-500 bg-emerald-50 text-emerald-700';
     }
   };
 
   const getMissionIcon = (type: string) => {
-    switch (type) {
-      case 'DIGITAL': return <Zap className="w-5 h-5" />;
-      case 'TERRITORIAL': return <Target className="w-5 h-5" />;
-      case 'RECRUTAMENTO': return <Users className="w-5 h-5" />;
-      default: return <CheckCircle2 className="w-5 h-5" />;
+    const normalized = String(type ?? '').toUpperCase();
+    switch (normalized) {
+      case 'DIGITAL':
+        return <Zap className="w-5 h-5" />;
+      case 'TERRITORIAL':
+        return <Target className="w-5 h-5" />;
+      case 'RECRUITMENT':
+      case 'RECRUTAMENTO':
+        return <Users className="w-5 h-5" />;
+      default:
+        return <CheckCircle2 className="w-5 h-5" />;
     }
   };
 
+  if (!stats) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-[#F5C400]" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8 relative">
-      {/* Identity Card */}
-      <motion.div 
+    <div className="relative space-y-6 md:space-y-8">
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-zinc-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden"
+        className="relative overflow-hidden rounded-[2rem] bg-zinc-900 p-5 text-white shadow-xl sm:p-6 md:p-8"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#F5C400] opacity-10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-        
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-          <div className="flex items-center gap-6">
-            <div className="w-20 h-20 bg-zinc-800 rounded-2xl flex items-center justify-center border-2 border-[#F5C400] shadow-[0_0_15px_rgba(245,196,0,0.3)]">
-              <span className="text-3xl font-bold text-[#F5C400]">{user?.name.charAt(0)}</span>
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#F5C400] opacity-10 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4 sm:gap-5 md:gap-6">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-[#F5C400] bg-zinc-800 text-2xl font-bold text-[#F5C400] shadow-[0_0_15px_rgba(245,196,0,0.3)] md:h-20 md:w-20 md:text-3xl">
+              {user?.name.charAt(0)}
             </div>
             <div>
-              <h2 className="text-3xl font-bold tracking-tight">{user?.name}</h2>
-              <div className="flex items-center gap-3 mt-2">
-                <span className="px-3 py-1 bg-zinc-800 rounded-full text-sm font-medium text-zinc-300 border border-zinc-700">
-                  Nível {stats.current_level} — 🔥 Militante
+              <h2 className="text-2xl font-bold tracking-tight md:text-3xl">{user?.name}</h2>
+              <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-300 sm:text-sm">
+                  Nivel {stats.current_level} - Militante
                 </span>
-                {stats.current_streak > 0 && (
-                  <span className="flex items-center gap-1 text-orange-400 font-bold text-sm bg-orange-400/10 px-3 py-1 rounded-full">
-                    <Flame className="w-4 h-4" /> {stats.current_streak} dias
+                {stats.current_streak > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-orange-400/10 px-3 py-1 text-xs font-bold text-orange-400 sm:text-sm">
+                    <Flame className="h-4 w-4" /> {stats.current_streak} dias
                   </span>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
-          
-          <div className="w-full md:w-64 bg-zinc-800 p-4 rounded-2xl border border-zinc-700">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-zinc-400 font-medium">Progresso para Nível {stats.current_level + 1}</span>
-              <span className="text-[#F5C400] font-bold">{stats.xp_total} XP</span>
+
+          <div className="w-full rounded-2xl border border-zinc-700 bg-zinc-800 p-4 md:w-72">
+            <div className="mb-2 flex items-center justify-between text-xs sm:text-sm">
+              <span className="font-medium text-zinc-400">Progresso para Nivel {stats.current_level + 1}</span>
+              <span className="font-bold text-[#F5C400]">{stats.xp_total} XP</span>
             </div>
-            <div className="h-2 bg-zinc-900 rounded-full overflow-hidden">
-              <div className="h-full bg-[#F5C400] rounded-full" style={{ width: `${(stats.xp_total % 1000) / 10}%` }}></div>
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-900">
+              <div className="h-full rounded-full bg-[#F5C400]" style={{ width: `${(stats.xp_total % 1000) / 10}%` }} />
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
         {[
           { label: 'XP Total', value: stats.xp_total, icon: Zap, color: 'text-[#F5C400]' },
-          { label: 'Missões', value: stats.missions_completed, icon: Target, color: 'text-emerald-500' },
+          { label: 'Missoes', value: stats.missions_completed, icon: Target, color: 'text-emerald-500' },
           { label: 'Recrutados', value: stats.volunteers_recruited, icon: Users, color: 'text-blue-500' },
-          { label: 'Ranking Local', value: `#${stats.cityRanking}`, icon: Trophy, color: 'text-purple-500' },
-        ].map((stat, i) => (
-          <motion.div 
+          { label: 'Ranking Local', value: `#${stats.cityRanking}`, icon: Trophy, color: 'text-violet-500' },
+        ].map((stat, index) => (
+          <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200 flex flex-col"
+            transition={{ delay: index * 0.08 }}
+            className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm md:p-5"
           >
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-medium text-zinc-500">{stat.label}</span>
-              <stat.icon className={`w-5 h-5 ${stat.color}`} />
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-500 md:text-sm">{stat.label}</span>
+              <stat.icon className={`h-4 w-4 md:h-5 md:w-5 ${stat.color}`} />
             </div>
-            <span className="text-3xl font-mono font-bold text-zinc-900">{stat.value}</span>
+            <span className="text-2xl font-bold text-zinc-900 md:text-3xl">{stat.value}</span>
           </motion.div>
         ))}
       </div>
 
-      {/* Training Progress */}
-      {trainingTracks.length > 0 && (
-        <motion.div 
+      {trainingTracks.length > 0 ? (
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm"
+          className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm md:p-6"
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
-                <GraduationCap className="w-6 h-6" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+                <GraduationCap className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-zinc-900">Sua Formação</h3>
+                <h3 className="text-lg font-bold text-zinc-900">Sua Formacao</h3>
                 <p className="text-xs text-zinc-500">Continue evoluindo seu conhecimento</p>
               </div>
             </div>
-            <Link to="/voluntario/formacao" className="text-sm font-bold text-[#F5C400] hover:underline flex items-center gap-1">
-              Ver todas <ArrowRight className="w-4 h-4" />
+            <Link to="/voluntario/formacao" className="inline-flex items-center gap-1 text-sm font-bold text-[#F5C400] hover:underline">
+              Ver todas <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {trainingTracks.filter(t => t.percentage > 0 && t.percentage < 100).length > 0 ? (
-              trainingTracks.filter(t => t.percentage > 0 && t.percentage < 100).slice(0, 2).map(track => (
-                <div key={track.id} className="bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
-                  <div className="flex justify-between items-start mb-3">
-                    <h4 className="font-bold text-zinc-900 text-sm">{track.title}</h4>
-                    <span className="text-xs font-black text-[#F5C400]">{Math.round(track.percentage)}%</span>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
+            {trainingTracks.filter((track) => track.percentage > 0 && track.percentage < 100).length > 0 ? (
+              trainingTracks
+                .filter((track) => track.percentage > 0 && track.percentage < 100)
+                .slice(0, 2)
+                .map((track) => (
+                  <div key={track.id} className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <h4 className="text-sm font-bold text-zinc-900">{track.title}</h4>
+                      <span className="text-xs font-black text-[#F5C400]">{Math.round(track.percentage)}%</span>
+                    </div>
+                    <div className="mb-4 h-2 overflow-hidden rounded-full bg-zinc-200">
+                      <div className="h-full bg-[#F5C400]" style={{ width: `${track.percentage}%` }} />
+                    </div>
+                    <Link
+                      to={`/voluntario/formacao/trilha/${track.slug}`}
+                      className="block w-full rounded-xl border border-zinc-200 bg-white py-2 text-center text-xs font-bold text-zinc-700 transition-colors hover:bg-zinc-100"
+                    >
+                      CONTINUAR TRILHA
+                    </Link>
                   </div>
-                  <div className="h-2 bg-zinc-200 rounded-full overflow-hidden mb-4">
-                    <div className="h-full bg-[#F5C400]" style={{ width: `${track.percentage}%` }} />
-                  </div>
-                  <Link 
-                    to={`/voluntario/formacao/trilha/${track.slug}`}
-                    className="w-full py-2 bg-white border border-zinc-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-100 transition-colors text-center block"
-                  >
-                    CONTINUAR TRILHA
-                  </Link>
-                </div>
-              ))
+                ))
             ) : (
-              <div className="md:col-span-2 bg-zinc-50 rounded-2xl p-8 text-center border border-zinc-100 border-dashed">
-                <p className="text-zinc-500 text-sm mb-4">Você ainda não começou nenhuma trilha de formação.</p>
-                <Link 
+              <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-6 text-center md:col-span-2 md:p-8">
+                <p className="mb-4 text-sm text-zinc-500">Voce ainda nao comecou nenhuma trilha de formacao.</p>
+                <Link
                   to="/voluntario/formacao"
-                  className="inline-flex items-center gap-2 bg-[#F5C400] text-zinc-900 px-6 py-2 rounded-xl font-bold text-sm hover:bg-[#e0b300] transition-colors"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#F5C400] px-6 py-2 text-sm font-bold text-zinc-900 transition-colors hover:bg-[#e0b300]"
                 >
-                  Começar agora <ArrowRight className="w-4 h-4" />
+                  Comecar agora <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
             )}
           </div>
         </motion.div>
-      )}
+      ) : null}
 
-      {/* Mission Feed */}
-      <div>
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
-          <h3 className="text-2xl font-bold text-zinc-900 tracking-tight">Missões Disponíveis</h3>
-          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-auto">
-            {['ALL', 'DIGITAL', 'TERRITORIAL', 'RECRUITMENT', 'TRAINING'].map(f => (
+      <section>
+        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <h3 className="text-2xl font-bold tracking-tight text-zinc-900">Missoes Disponiveis</h3>
+          <div className="mobile-chip-scroll flex w-full gap-2 overflow-x-auto pb-1 md:w-auto">
+            {filterOptions.map((option) => (
               <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  filter === f 
-                    ? 'bg-zinc-900 text-white' 
-                    : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+                key={option}
+                onClick={() => setFilter(option)}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                  filter === option
+                    ? 'bg-zinc-900 text-white'
+                    : 'border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
                 }`}
               >
-                {f === 'ALL' ? 'Todas' : f}
+                {getFilterLabel(option)}
               </button>
             ))}
           </div>
         </div>
 
         {filteredMissions.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl border border-zinc-200 border-dashed">
-            <Target className="w-12 h-12 text-zinc-300 mx-auto mb-4" />
-            <p className="text-zinc-500 font-medium">Nenhuma missão disponível no momento.</p>
+          <div className="rounded-2xl border border-dashed border-zinc-200 bg-white py-12 text-center">
+            <Target className="mx-auto mb-4 h-12 w-12 text-zinc-300" />
+            <p className="font-medium text-zinc-500">Nenhuma missao disponivel no momento.</p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 gap-4">
-            {filteredMissions.map((mission, i) => (
-              <motion.div
+          <div className="grid gap-4 lg:grid-cols-2">
+            {filteredMissions.map((mission, index) => (
+              <motion.article
                 key={mission.id}
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.05 }}
-                className={`bg-white p-6 rounded-2xl shadow-sm border-l-4 ${getUrgencyColor(mission.urgency).split(' ')[0]} border-y border-r border-zinc-200 flex flex-col cursor-pointer hover:shadow-md transition-shadow`}
+                transition={{ delay: index * 0.04 }}
+                className={`flex cursor-pointer flex-col rounded-2xl border-l-4 border-r border-y border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md ${getUrgencyColor(mission.urgency).split(' ')[0]}`}
                 onClick={() => setSelectedMission(mission)}
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-600">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600">
                       {getMissionIcon(mission.type)}
                     </div>
                     <div>
-                      <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded-md mb-1 inline-block ${getUrgencyColor(mission.urgency)}`}>
-                        {mission.urgency === 'URGENT' ? 'URGENTE' : mission.urgency === 'PRIORITY' ? 'PRIORITÁRIA' : 'CONTÍNUA'}
+                      <span className={`mb-1 inline-block rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${getUrgencyColor(mission.urgency)}`}>
+                        {String(mission.urgency ?? '').toUpperCase() === 'URGENT'
+                          ? 'URGENTE'
+                          : String(mission.urgency ?? '').toUpperCase() === 'PRIORITY'
+                            ? 'PRIORITARIA'
+                            : 'CONTINUA'}
                       </span>
-                      <h4 className="text-lg font-bold text-zinc-900 leading-tight">{mission.title}</h4>
+                      <h4 className="text-lg font-bold leading-tight text-zinc-900">{mission.title}</h4>
                     </div>
                   </div>
+
                   <div className="text-right">
-                    <span className="text-2xl font-mono font-bold text-[#F5C400]">+{mission.xp_reward}</span>
-                    <span className="block text-xs font-bold text-zinc-400 uppercase">XP</span>
+                    <span className="text-2xl font-bold text-[#F5C400]">+{mission.xp_reward}</span>
+                    <span className="block text-[10px] font-bold uppercase text-zinc-400">XP</span>
                   </div>
                 </div>
-                
-                <p className="text-zinc-600 text-sm mb-6 flex-1 line-clamp-2">{mission.description}</p>
-                
-                <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-100">
-                  <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
-                    <Clock className="w-4 h-4" />
-                    {mission.deadline ? format(new Date(mission.deadline), "dd MMM, HH:mm", { locale: ptBR }) : 'Sem prazo'}
+
+                <p className="mb-6 flex-1 text-sm text-zinc-600 line-clamp-2">{mission.description}</p>
+
+                <div className="mt-auto flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="inline-flex items-center gap-2 text-xs font-medium text-zinc-500">
+                    <Clock className="h-4 w-4" />
+                    {mission.deadline ? format(new Date(mission.deadline), 'dd MMM, HH:mm', { locale: ptBR }) : 'Sem prazo'}
                   </div>
-                  <button className="bg-zinc-900 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-zinc-800 transition-colors shadow-sm">
-                    Aceitar Missão
+                  <button className="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-zinc-800 sm:w-auto">
+                    Aceitar Missao
                   </button>
                 </div>
-              </motion.div>
+              </motion.article>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Mission Details Modal */}
       <AnimatePresence>
-        {selectedMission && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+        {selectedMission ? (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.98 }}
+              className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-3xl"
             >
-              <div className="p-6 border-b border-zinc-100 flex justify-between items-start bg-zinc-50">
+              <div className="flex items-start justify-between border-b border-zinc-100 bg-zinc-50 p-4 sm:p-6">
                 <div>
-                  <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded-md mb-2 inline-block ${getUrgencyColor(selectedMission.urgency)}`}>
-                    {selectedMission.urgency === 'URGENT' ? 'URGENTE' : selectedMission.urgency === 'PRIORITY' ? 'PRIORITÁRIA' : 'CONTÍNUA'}
+                  <span className={`mb-2 inline-block rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${getUrgencyColor(selectedMission.urgency)}`}>
+                    {String(selectedMission.urgency ?? '').toUpperCase() === 'URGENT'
+                      ? 'URGENTE'
+                      : String(selectedMission.urgency ?? '').toUpperCase() === 'PRIORITY'
+                        ? 'PRIORITARIA'
+                        : 'CONTINUA'}
                   </span>
-                  <h2 className="text-2xl font-bold text-zinc-900">{selectedMission.title}</h2>
+                  <h2 className="text-xl font-bold text-zinc-900 sm:text-2xl">{selectedMission.title}</h2>
                 </div>
-                <button onClick={() => setSelectedMission(null)} className="p-2 text-zinc-400 hover:text-zinc-900 bg-white rounded-full shadow-sm">
-                  <X className="w-5 h-5" />
+                <button
+                  onClick={() => setSelectedMission(null)}
+                  className="rounded-full bg-white p-2 text-zinc-400 shadow-sm transition-colors hover:text-zinc-900"
+                  aria-label="Fechar detalhes da missao"
+                >
+                  <X className="h-5 w-5" />
                 </button>
               </div>
-              
-              <div className="p-6 overflow-y-auto flex-1">
-                <p className="text-zinc-600 mb-6 text-lg leading-relaxed">{selectedMission.description}</p>
-                
-                <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-6 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Zap className="w-6 h-6 text-yellow-600" />
-                    <span className="font-medium text-yellow-800">Recompensa da Missão</span>
+
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                <p className="mb-6 text-base leading-relaxed text-zinc-600 sm:text-lg">{selectedMission.description}</p>
+
+                <div className="mb-6 flex items-center justify-between rounded-2xl border border-yellow-200 bg-yellow-50 p-4">
+                  <div className="inline-flex items-center gap-3">
+                    <Zap className="h-6 w-6 text-yellow-600" />
+                    <span className="font-medium text-yellow-800">Recompensa da Missao</span>
                   </div>
-                  <span className="text-2xl font-mono font-bold text-yellow-600">+{selectedMission.xp_reward} XP</span>
+                  <span className="text-2xl font-bold text-yellow-600">+{selectedMission.xp_reward} XP</span>
                 </div>
 
                 <form onSubmit={handleSubmitEvidence} className="space-y-4">
-                  <h3 className="font-bold text-zinc-900">Evidência Necessária</h3>
-                  
-                  {selectedMission.evidence_type === 'TEXT' && (
-                    <textarea 
+                  <h3 className="font-bold text-zinc-900">Evidencia Necessaria</h3>
+
+                  {selectedMission.evidence_type === 'TEXT' ? (
+                    <textarea
                       required
-                      placeholder="Descreva como você concluiu a missão..."
-                      className="w-full px-4 py-3 rounded-xl border border-zinc-300 focus:ring-2 focus:ring-[#F5C400] focus:border-transparent outline-none min-h-[120px]"
+                      placeholder="Descreva como voce concluiu a missao..."
+                      className="min-h-[120px] w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-transparent focus:ring-2 focus:ring-[#F5C400]"
                       value={evidenceContent}
-                      onChange={e => setEvidenceContent(e.target.value)}
+                      onChange={(event) => setEvidenceContent(event.target.value)}
                     />
-                  )}
-                  
-                  {selectedMission.evidence_type === 'LINK' && (
-                    <input 
+                  ) : null}
+
+                  {selectedMission.evidence_type === 'LINK' ? (
+                    <input
                       type="url"
                       required
                       placeholder="https://..."
-                      className="w-full px-4 py-3 rounded-xl border border-zinc-300 focus:ring-2 focus:ring-[#F5C400] focus:border-transparent outline-none"
+                      className="w-full rounded-xl border border-zinc-300 px-4 py-3 outline-none focus:border-transparent focus:ring-2 focus:ring-[#F5C400]"
                       value={evidenceContent}
-                      onChange={e => setEvidenceContent(e.target.value)}
+                      onChange={(event) => setEvidenceContent(event.target.value)}
                     />
-                  )}
-                  
-                  {selectedMission.evidence_type === 'PHOTO' && (
-                    <div className="border-2 border-dashed border-zinc-300 rounded-2xl p-8 text-center hover:bg-zinc-50 transition-colors cursor-pointer">
-                      <Upload className="w-8 h-8 text-zinc-400 mx-auto mb-2" />
+                  ) : null}
+
+                  {selectedMission.evidence_type === 'PHOTO' ? (
+                    <div className="cursor-pointer rounded-2xl border-2 border-dashed border-zinc-300 p-8 text-center transition-colors hover:bg-zinc-50">
+                      <Upload className="mx-auto mb-2 h-8 w-8 text-zinc-400" />
                       <p className="text-sm font-medium text-zinc-600">Clique para fazer upload da foto</p>
-                      <p className="text-xs text-zinc-400 mt-1">PNG, JPG até 5MB</p>
+                      <p className="mt-1 text-xs text-zinc-400">PNG, JPG ate 5MB</p>
                     </div>
-                  )}
+                  ) : null}
 
-                  {selectedMission.evidence_type === 'NONE' && (
-                    <div className="bg-zinc-50 p-4 rounded-xl text-sm text-zinc-600 text-center border border-zinc-200">
-                      Nenhuma evidência necessária. Basta confirmar a conclusão.
+                  {selectedMission.evidence_type === 'NONE' ? (
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-center text-sm text-zinc-600">
+                      Nenhuma evidencia necessaria. Basta confirmar a conclusao.
                     </div>
-                  )}
+                  ) : null}
 
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     disabled={isSubmitting}
-                    className="w-full bg-[#F5C400] text-zinc-900 font-bold py-4 px-6 rounded-xl hover:bg-[#e0b300] transition-colors shadow-sm mt-4 disabled:opacity-50"
+                    className="mt-4 w-full rounded-xl bg-[#F5C400] px-6 py-3.5 font-bold text-zinc-900 shadow-sm transition-colors hover:bg-[#e0b300] disabled:opacity-50"
                   >
-                    {isSubmitting ? 'Enviando...' : 'Enviar Evidência e Concluir'}
+                    {isSubmitting ? 'Enviando...' : 'Enviar Evidencia e Concluir'}
                   </button>
                 </form>
               </div>
             </motion.div>
           </div>
-        )}
+        ) : null}
       </AnimatePresence>
     </div>
   );

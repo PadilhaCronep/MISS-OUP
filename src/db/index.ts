@@ -233,6 +233,18 @@ export function setupDb() {
       FOREIGN KEY(template_id) REFERENCES campaign_templates(id)
     );
 
+    CREATE TABLE IF NOT EXISTS access_bindings (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      scope_type TEXT NOT NULL,
+      scope_ref TEXT,
+      office_context TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES volunteers(id)
+    );
+
     CREATE TABLE IF NOT EXISTS campaign_sectors (
       id TEXT PRIMARY KEY,
       campaign_id TEXT NOT NULL,
@@ -455,6 +467,10 @@ export function setupDb() {
       ON scores_territoriais(see_crescimento DESC);
     CREATE INDEX IF NOT EXISTS idx_questionarios_cidade
       ON questionarios_eleitor(cidade, estado);
+    CREATE INDEX IF NOT EXISTS idx_access_bindings_user
+      ON access_bindings(user_id, is_active);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_access_bindings_unique
+      ON access_bindings(user_id, role, scope_type, COALESCE(scope_ref, ''), COALESCE(office_context, ''));
   `);
 
   // Seed initial data if empty
@@ -475,7 +491,112 @@ export function setupDb() {
     seedInteligenciaEleitoral();
   }
 
+  ensureAccessBindings();
+
   seedDemoEcosystem(db);
+  ensureAccessBindings();
+}
+
+function ensureAccessBindings() {
+  const users = db
+    .prepare('SELECT id, role, state, city FROM volunteers')
+    .all() as Array<{ id: string; role: string | null; state: string | null; city: string | null }>;
+
+  const exists = db.prepare(
+    `SELECT id FROM access_bindings
+     WHERE user_id = ?
+       AND role = ?
+       AND scope_type = ?
+       AND COALESCE(scope_ref, '') = COALESCE(?, '')
+       AND COALESCE(office_context, '') = COALESCE(?, '')
+       AND is_active = 1
+     LIMIT 1`,
+  );
+
+  const insert = db.prepare(
+    `INSERT INTO access_bindings (id, user_id, role, scope_type, scope_ref, office_context, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, 1)`,
+  );
+
+  const ensureBinding = (
+    userId: string,
+    role: string,
+    scopeType: string,
+    scopeRef: string | null,
+    officeContext: string | null = null,
+  ) => {
+    const found = exists.get(userId, role, scopeType, scopeRef ?? '', officeContext ?? '');
+    if (found) return;
+    insert.run(
+      `ab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      userId,
+      role,
+      scopeType,
+      scopeRef,
+      officeContext,
+    );
+  };
+
+  for (const user of users) {
+    const role = (user.role || 'VOLUNTARIO').toUpperCase();
+    const isPreCandidate = role === 'PRE_CANDIDATO' || role.startsWith('PRE_CANDIDATO_');
+
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'ADMIN_NACIONAL') {
+      ensureBinding(user.id, 'ADMIN_NACIONAL', 'NACIONAL', null);
+      continue;
+    }
+
+    if (role === 'COORDENADOR_ESTADUAL' || role === 'ADMIN_ESTADUAL') {
+      ensureBinding(user.id, 'ADMIN_ESTADUAL', 'ESTADUAL', user.state ? user.state.toUpperCase() : null);
+      continue;
+    }
+
+    if (isPreCandidate) {
+      const isPresidential = role.includes('PRESID');
+
+      if (isPresidential || !user.state) {
+        ensureBinding(user.id, 'PRE_CANDIDATO', 'NACIONAL', null, 'PRESIDENTE');
+        continue;
+      }
+
+      const officeContext = role.includes('DEP') ? 'DEPUTADO' : 'GOVERNADOR';
+      ensureBinding(user.id, 'PRE_CANDIDATO', 'ESTADUAL', user.state.toUpperCase(), officeContext);
+      continue;
+    }
+
+    if (role === 'CHEFE_CAMPANHA' || role === 'COORDENADOR_CAMPANHA') {
+      ensureBinding(
+        user.id,
+        role,
+        user.state ? 'ESTADUAL' : 'PROPRIO_USUARIO',
+        user.state ? user.state.toUpperCase() : user.id,
+      );
+      continue;
+    }
+
+    if (role === 'LIDER_SETOR' || role === 'MEMBRO_SETOR') {
+      if (user.state) {
+        ensureBinding(user.id, role, 'ESTADUAL', user.state.toUpperCase());
+      }
+      ensureBinding(user.id, role, 'PROPRIO_USUARIO', user.id);
+      continue;
+    }
+
+    if (role === 'COORDENADOR_MUNICIPAL' || role === 'ADMIN_REGIONAL') {
+      ensureBinding(user.id, 'ADMIN_REGIONAL', 'MUNICIPAL', user.city ?? null);
+      if (user.state) {
+        ensureBinding(user.id, 'ADMIN_REGIONAL', 'ESTADUAL', user.state.toUpperCase());
+      }
+      continue;
+    }
+
+    if (role === 'LIDER_EMERGENTE' || role === 'MILITANTE') {
+      ensureBinding(user.id, 'MILITANTE', 'PROPRIO_USUARIO', user.id);
+      continue;
+    }
+
+    ensureBinding(user.id, 'VOLUNTARIO', 'PROPRIO_USUARIO', user.id);
+  }
 }
 
 function seedOrganizationalSystem() {
@@ -680,31 +801,31 @@ type CidadeInteligenciaSeed = {
 
 function seedInteligenciaEleitoral() {
   const cidadesSP: CidadeInteligenciaSeed[] = [
-    { cidade: 'São Paulo', estado: 'SP', votos_2022: 12840, populacao_total: 12325232, pct_jovens_16_34: 28.4, pct_acesso_internet: 81.2, pct_urbano: 99.1, latitude: -23.5505, longitude: -46.6333 },
+    { cidade: 'Sï¿½o Paulo', estado: 'SP', votos_2022: 12840, populacao_total: 12325232, pct_jovens_16_34: 28.4, pct_acesso_internet: 81.2, pct_urbano: 99.1, latitude: -23.5505, longitude: -46.6333 },
     { cidade: 'Campinas', estado: 'SP', votos_2022: 8920, populacao_total: 1213792, pct_jovens_16_34: 30.1, pct_acesso_internet: 78.5, pct_urbano: 98.7, latitude: -22.9056, longitude: -47.0608 },
     { cidade: 'Santos', estado: 'SP', votos_2022: 2180, populacao_total: 433966, pct_jovens_16_34: 25.8, pct_acesso_internet: 76.3, pct_urbano: 99.8, latitude: -23.9608, longitude: -46.3336 },
-    { cidade: 'São José dos Campos', estado: 'SP', votos_2022: 5640, populacao_total: 729737, pct_jovens_16_34: 31.2, pct_acesso_internet: 80.1, pct_urbano: 99.3, latitude: -23.1896, longitude: -45.8841 },
-    { cidade: 'Ribeirão Preto', estado: 'SP', votos_2022: 3920, populacao_total: 711825, pct_jovens_16_34: 29.7, pct_acesso_internet: 77.8, pct_urbano: 99.6, latitude: -21.1775, longitude: -47.8103 },
+    { cidade: 'Sï¿½o Josï¿½ dos Campos', estado: 'SP', votos_2022: 5640, populacao_total: 729737, pct_jovens_16_34: 31.2, pct_acesso_internet: 80.1, pct_urbano: 99.3, latitude: -23.1896, longitude: -45.8841 },
+    { cidade: 'Ribeirï¿½o Preto', estado: 'SP', votos_2022: 3920, populacao_total: 711825, pct_jovens_16_34: 29.7, pct_acesso_internet: 77.8, pct_urbano: 99.6, latitude: -21.1775, longitude: -47.8103 },
     { cidade: 'Sorocaba', estado: 'SP', votos_2022: 4180, populacao_total: 696382, pct_jovens_16_34: 30.5, pct_acesso_internet: 76.2, pct_urbano: 99.2, latitude: -23.5015, longitude: -47.4526 },
-    { cidade: 'Mauá', estado: 'SP', votos_2022: 980, populacao_total: 480793, pct_jovens_16_34: 32.8, pct_acesso_internet: 68.4, pct_urbano: 99.9, latitude: -23.6678, longitude: -46.4614 },
-    { cidade: 'São José do Rio Preto', estado: 'SP', votos_2022: 2840, populacao_total: 460782, pct_jovens_16_34: 27.3, pct_acesso_internet: 75.1, pct_urbano: 99.4, latitude: -20.8197, longitude: -49.3795 },
+    { cidade: 'Mauï¿½', estado: 'SP', votos_2022: 980, populacao_total: 480793, pct_jovens_16_34: 32.8, pct_acesso_internet: 68.4, pct_urbano: 99.9, latitude: -23.6678, longitude: -46.4614 },
+    { cidade: 'Sï¿½o Josï¿½ do Rio Preto', estado: 'SP', votos_2022: 2840, populacao_total: 460782, pct_jovens_16_34: 27.3, pct_acesso_internet: 75.1, pct_urbano: 99.4, latitude: -20.8197, longitude: -49.3795 },
     { cidade: 'Guarulhos', estado: 'SP', votos_2022: 3120, populacao_total: 1392121, pct_jovens_16_34: 33.1, pct_acesso_internet: 70.2, pct_urbano: 99.8, latitude: -23.4539, longitude: -46.5333 },
     { cidade: 'Osasco', estado: 'SP', votos_2022: 2560, populacao_total: 696850, pct_jovens_16_34: 31.7, pct_acesso_internet: 72.8, pct_urbano: 99.7, latitude: -23.5324, longitude: -46.792 },
     { cidade: 'Presidente Prudente', estado: 'SP', votos_2022: 1240, populacao_total: 230006, pct_jovens_16_34: 28.9, pct_acesso_internet: 72.4, pct_urbano: 99.0, latitude: -22.1256, longitude: -51.3889 },
     { cidade: 'Piracicaba', estado: 'SP', votos_2022: 1680, populacao_total: 407252, pct_jovens_16_34: 29.2, pct_acesso_internet: 74.6, pct_urbano: 98.5, latitude: -22.7253, longitude: -47.6492 },
     { cidade: 'Franca', estado: 'SP', votos_2022: 890, populacao_total: 352500, pct_jovens_16_34: 30.8, pct_acesso_internet: 71.3, pct_urbano: 99.1, latitude: -20.5386, longitude: -47.4008 },
     { cidade: 'Limeira', estado: 'SP', votos_2022: 720, populacao_total: 308252, pct_jovens_16_34: 31.4, pct_acesso_internet: 73.9, pct_urbano: 98.8, latitude: -22.5648, longitude: -47.4019 },
-    { cidade: 'Taubaté', estado: 'SP', votos_2022: 1420, populacao_total: 318099, pct_jovens_16_34: 29.6, pct_acesso_internet: 76.1, pct_urbano: 98.9, latitude: -23.0268, longitude: -45.5558 },
+    { cidade: 'Taubatï¿½', estado: 'SP', votos_2022: 1420, populacao_total: 318099, pct_jovens_16_34: 29.6, pct_acesso_internet: 76.1, pct_urbano: 98.9, latitude: -23.0268, longitude: -45.5558 },
     { cidade: 'Bauru', estado: 'SP', votos_2022: 1860, populacao_total: 377648, pct_jovens_16_34: 28.4, pct_acesso_internet: 74.8, pct_urbano: 99.3, latitude: -22.3246, longitude: -49.0687 },
-    { cidade: 'Marília', estado: 'SP', votos_2022: 620, populacao_total: 237094, pct_jovens_16_34: 27.8, pct_acesso_internet: 71.2, pct_urbano: 99.0, latitude: -22.2129, longitude: -49.9455 },
-    { cidade: 'São Carlos', estado: 'SP', votos_2022: 980, populacao_total: 254484, pct_jovens_16_34: 34.2, pct_acesso_internet: 79.8, pct_urbano: 99.4, latitude: -22.0175, longitude: -47.8908 },
+    { cidade: 'Marï¿½lia', estado: 'SP', votos_2022: 620, populacao_total: 237094, pct_jovens_16_34: 27.8, pct_acesso_internet: 71.2, pct_urbano: 99.0, latitude: -22.2129, longitude: -49.9455 },
+    { cidade: 'Sï¿½o Carlos', estado: 'SP', votos_2022: 980, populacao_total: 254484, pct_jovens_16_34: 34.2, pct_acesso_internet: 79.8, pct_urbano: 99.4, latitude: -22.0175, longitude: -47.8908 },
     { cidade: 'Araraquara', estado: 'SP', votos_2022: 740, populacao_total: 238208, pct_jovens_16_34: 30.1, pct_acesso_internet: 76.7, pct_urbano: 99.5, latitude: -21.7886, longitude: -48.1758 },
-    { cidade: 'Jundiaí', estado: 'SP', votos_2022: 1120, populacao_total: 431896, pct_jovens_16_34: 31.8, pct_acesso_internet: 80.4, pct_urbano: 99.6, latitude: -23.1864, longitude: -46.8964 },
+    { cidade: 'Jundiaï¿½', estado: 'SP', votos_2022: 1120, populacao_total: 431896, pct_jovens_16_34: 31.8, pct_acesso_internet: 80.4, pct_urbano: 99.6, latitude: -23.1864, longitude: -46.8964 },
     { cidade: 'Indaiatuba', estado: 'SP', votos_2022: 480, populacao_total: 264893, pct_jovens_16_34: 34.6, pct_acesso_internet: 78.2, pct_urbano: 99.2, latitude: -23.0892, longitude: -47.2192 },
     { cidade: 'Americana', estado: 'SP', votos_2022: 390, populacao_total: 241428, pct_jovens_16_34: 30.4, pct_acesso_internet: 76.9, pct_urbano: 99.7, latitude: -22.7394, longitude: -47.3322 },
     { cidade: 'Catanduva', estado: 'SP', votos_2022: 280, populacao_total: 121774, pct_jovens_16_34: 27.2, pct_acesso_internet: 68.5, pct_urbano: 99.0, latitude: -21.1381, longitude: -48.9722 },
     { cidade: 'Botucatu', estado: 'SP', votos_2022: 340, populacao_total: 148100, pct_jovens_16_34: 32.8, pct_acesso_internet: 75.3, pct_urbano: 99.1, latitude: -22.8833, longitude: -48.4444 },
-    { cidade: 'Araçatuba', estado: 'SP', votos_2022: 560, populacao_total: 205179, pct_jovens_16_34: 27.9, pct_acesso_internet: 69.8, pct_urbano: 99.2, latitude: -21.2089, longitude: -50.4322 },
+    { cidade: 'Araï¿½atuba', estado: 'SP', votos_2022: 560, populacao_total: 205179, pct_jovens_16_34: 27.9, pct_acesso_internet: 69.8, pct_urbano: 99.2, latitude: -21.2089, longitude: -50.4322 },
   ];
 
   const inserirEleitoral = db.prepare(`
@@ -792,5 +913,8 @@ function seedInteligenciaEleitoral() {
 
   seedTx(cidadesSP);
 }
+
+
+
 
 

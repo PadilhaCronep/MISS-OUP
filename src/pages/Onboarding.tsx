@@ -528,7 +528,7 @@ export const Onboarding: React.FC = () => {
           const storedUser = localStorage.getItem('missao_user');
           if (storedUser) {
             const user = JSON.parse(storedUser);
-            if (['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN'].includes(user.role)) {
+            if (['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'].includes(user.role)) {
               navigate('/coordinator');
             } else {
               navigate('/');
@@ -618,3 +618,4 @@ export const Onboarding: React.FC = () => {
     </div>
   );
 };
+

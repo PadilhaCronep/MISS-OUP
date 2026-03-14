@@ -1,7 +1,7 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Map, Target, Award, BookOpen, LogOut, Menu, Users, Bell, Settings } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Award, Bell, BookOpen, Compass, Home, LogOut, Map, Menu, Settings, Target, Trophy, Users, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from './AuthContext.tsx';
 import { NotificacoesDrawer } from './voluntario/NotificacoesDrawer.tsx';
 import { Breadcrumb } from './layout/Breadcrumb.tsx';
@@ -29,10 +29,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         return;
       }
 
-      const result = await apiClient.get<{ isMember: boolean }>(
-        `/api/voluntario/minha-funcao?volunteerId=${user.id}`,
-        { signal: controller.signal },
-      );
+      const result = await apiClient.get<{ isMember: boolean }>('/api/voluntario/minha-funcao', {
+        signal: controller.signal,
+      });
 
       if (controller.signal.aborted || result.error || !result.data) {
         setIsCampaignMember(false);
@@ -49,28 +48,65 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     };
   }, [user]);
 
-  const navItems = [
-    { name: 'Dashboard', path: '/', icon: Home },
-    { name: 'Missoes', path: '/missions', icon: Target },
-    { name: 'Mapa', path: '/map', icon: Map },
-    { name: 'Formacao', path: '/voluntario/formacao', icon: BookOpen },
-    { name: 'Conquistas', path: '/badges', icon: Award },
-  ];
+  const navItems = useMemo(() => {
+    const items = [
+      { name: 'Arena', path: '/', icon: Trophy },
+      { name: 'Engajamento', path: '/engajamento', icon: Target },
+      { name: 'Dashboard', path: '/dashboard', icon: Home },
+      { name: 'Mapa', path: '/map', icon: Map },
+      { name: 'Guia Inicial', path: '/guia-inicial', icon: Compass },
+      { name: 'Formacao', path: '/voluntario/formacao', icon: BookOpen },
+      { name: 'Conquistas', path: '/badges', icon: Award },
+    ];
 
-  if (isCampaignMember) {
-    navItems.push({ name: 'Minha Funcao', path: '/voluntario/funcao', icon: Settings });
-  }
+    if (isCampaignMember) {
+      items.push({ name: 'Campanhas', path: '/voluntario/campanhas', icon: Users });
+      items.push({ name: 'Minha Funcao', path: '/voluntario/funcao', icon: Settings });
+    }
 
-  if (user && ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN'].includes(user.role)) {
-    navItems.push({ name: 'Coordenacao', path: '/coordinator', icon: Users });
-  }
+    if (
+      user &&
+      ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'].includes(user.role)
+    ) {
+      items.push({ name: 'Coordenacao', path: '/coordinator', icon: Users });
+    }
+
+    return items;
+  }, [isCampaignMember, user]);
+
+  const mobileQuickItems = useMemo(
+    () => navItems.filter((item) => ['/', '/engajamento', '/dashboard', '/map'].includes(item.path)).slice(0, 4),
+    [navItems],
+  );
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileMenuOpen]);
+
+  const isPathActive = (path: string): boolean => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
 
   if (!user || location.pathname.startsWith('/coordinator')) {
-    return <div className="min-h-screen bg-zinc-50">{children}</div>;
+    return (
+      <div className="min-h-screen bg-zinc-50 bg-[radial-gradient(circle_at_top_right,_rgba(245,196,0,0.08),_transparent_42%)]">
+        {children}
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-zinc-50 bg-[radial-gradient(circle_at_top_right,_rgba(245,196,0,0.08),_transparent_42%)] flex flex-col md:flex-row">
       <aside className="hidden md:flex flex-col w-64 bg-zinc-900 text-zinc-100 min-h-screen border-r border-zinc-800">
         <div className="p-6 flex items-center justify-between">
           <div>
@@ -93,10 +129,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         <nav className="flex-1 px-4 space-y-2 mt-4">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = isPathActive(item.path);
             return (
               <Link
-                key={item.name}
+                key={item.path}
                 to={item.path}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
                   isActive
@@ -131,48 +167,158 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </aside>
 
-      <header className="md:hidden bg-zinc-900 text-zinc-100 p-4 flex items-center justify-between sticky top-0 z-50">
-        <h1 className="text-xl font-bold text-[#F5C400]">MISSAO</h1>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2" aria-label="Abrir menu">
-          <Menu className="w-6 h-6" />
-        </button>
+      <header className="md:hidden sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] text-zinc-100 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-400">Plataforma</p>
+            <h1 className="truncate text-base font-extrabold tracking-tight text-[#F5C400]">MISSAO</h1>
+          </div>
+          <button
+            onClick={() => setIsNotificationsOpen(true)}
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100"
+            aria-label="Abrir notificacoes"
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
 
-      {isMobileMenuOpen && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="md:hidden bg-zinc-900 text-zinc-100 absolute top-16 left-0 right-0 z-40 border-b border-zinc-800 shadow-xl"
-        >
-          <nav className="p-4 space-y-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.name}
-                to={item.path}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-300 hover:bg-zinc-800"
-              >
-                <item.icon className="w-5 h-5" />
-                {item.name}
-              </Link>
-            ))}
-            <button
-              onClick={logout}
-              className="flex items-center gap-3 px-4 py-3 w-full text-red-400 hover:bg-zinc-800 rounded-xl"
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 z-40 bg-black/55 md:hidden"
+              aria-label="Fechar menu"
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'tween', duration: 0.22 }}
+              className="fixed inset-y-0 left-0 z-50 w-[86%] max-w-sm border-r border-zinc-800 bg-zinc-950 text-zinc-100 shadow-2xl md:hidden"
             >
-              <LogOut className="w-5 h-5" />
-              Sair
-            </button>
-          </nav>
-        </motion.div>
-      )}
+              <div className="flex h-full flex-col">
+                <div className="border-b border-zinc-800 px-4 pb-4 pt-[max(env(safe-area-inset-top),1rem)]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Navegacao</p>
+                      <h2 className="text-xl font-black tracking-tight text-[#F5C400]">MISSAO</h2>
+                    </div>
+                    <button
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-200"
+                      aria-label="Fechar menu"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-4 md:p-8">
+                  <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-3">
+                    <p className="truncate text-sm font-semibold text-white">{user.name}</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-wider text-zinc-400">Nivel {user.current_level}</p>
+                  </div>
+                </div>
+
+                <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+                  {navItems.map((item) => {
+                    const active = isPathActive(item.path);
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
+                          active
+                            ? 'bg-[#F5C400] text-zinc-950'
+                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                        }`}
+                      >
+                        <item.icon className="h-5 w-5" />
+                        {item.name}
+                      </Link>
+                    );
+                  })}
+                </nav>
+
+                <div className="space-y-2 border-t border-zinc-800 px-3 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3">
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setIsNotificationsOpen(true);
+                    }}
+                    className="flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-3 text-sm text-zinc-200"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Bell className="h-4 w-4" />
+                      Notificacoes
+                    </span>
+                    {unreadCount > 0 ? (
+                      <span className="rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">{unreadCount}</span>
+                    ) : null}
+                  </button>
+                  <button
+                    onClick={logout}
+                    className="flex w-full items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-3 text-sm font-semibold text-red-300"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sair
+                  </button>
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <main className="flex-1 overflow-y-auto pb-24 md:pb-0">
+        <div className="max-w-7xl mx-auto px-4 pb-8 pt-5 sm:px-6 md:py-8 lg:px-8">
           <Breadcrumb />
           {children}
         </div>
       </main>
+
+      <nav className="safe-area-bottom fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur md:hidden">
+        <div className="grid grid-cols-5 gap-1">
+          {mobileQuickItems.map((item) => {
+            const active = isPathActive(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-semibold transition-colors ${
+                  active ? 'bg-[#F5C400] text-zinc-950' : 'text-zinc-300 hover:bg-zinc-900'
+                }`}
+              >
+                <item.icon className="h-4 w-4" />
+                <span className="mt-1">{item.name}</span>
+              </Link>
+            );
+          })}
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-900"
+          >
+            <Menu className="h-4 w-4" />
+            <span className="mt-1">Menu</span>
+          </button>
+        </div>
+      </nav>
 
       <NotificacoesDrawer
         isOpen={isNotificationsOpen}

@@ -12,7 +12,7 @@ export const CoordinatorDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (user && ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN'].includes(user.role)) {
+    if (user && ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'].includes(user.role)) {
       fetch(`/api/coordinator/volunteers?state=${user.state}`)
         .then(res => res.json())
         .then(data => setVolunteers(data.volunteers));
@@ -52,7 +52,7 @@ export const CoordinatorDashboard: React.FC = () => {
     v.city.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (!user || !['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN'].includes(user.role)) {
+  if (!user || !['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'].includes(user.role)) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
@@ -205,3 +205,4 @@ export const CoordinatorDashboard: React.FC = () => {
     </div>
   );
 };
+

@@ -1,4 +1,5 @@
-﻿import express from 'express';
+import 'dotenv/config';
+import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import { setupDb } from './src/db/index.js';
 import { apiRouter } from './src/api/index.js';
@@ -6,7 +7,7 @@ import { errorHandler } from './src/api/middleware/errorHandler.js';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
 

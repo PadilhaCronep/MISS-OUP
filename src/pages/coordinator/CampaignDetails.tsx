@@ -129,6 +129,19 @@ const buildMonthGrid = (monthRef: Date): Date[] => {
 const monthTitle = (monthRef: Date): string =>
   monthRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
+const COORDINATOR_ROLES = new Set([
+  'COORDENADOR_MUNICIPAL',
+  'COORDENADOR_ESTADUAL',
+  'ADMIN',
+  'ADMIN_NACIONAL',
+  'ADMIN_ESTADUAL',
+  'ADMIN_REGIONAL',
+  'PRE_CANDIDATO',
+  'CHEFE_CAMPANHA',
+  'COORDENADOR_CAMPANHA',
+  'LIDER_SETOR',
+]);
+
 export const CampaignDetails: React.FC = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -165,6 +178,13 @@ export const CampaignDetails: React.FC = () => {
   });
 
   const searchDebounced = useDebounce(search, 250);
+
+  const isCoordinatorProfile = Boolean(user && COORDINATOR_ROLES.has(user.role));
+  const backToCampaignsPath = isCoordinatorProfile ? '/coordinator/campaigns' : '/voluntario/campanhas';
+  const backToCampaignsLabel = isCoordinatorProfile ? 'Voltar para campanhas' : 'Voltar para minhas campanhas';
+
+  const canEditTask = (task: CampaignTaskWorkspace): boolean =>
+    isCoordinatorProfile || task.assigned_to === user?.id;
 
   useEffect(() => {
     if (!campanha || campanha.sectors.length === 0) return;
@@ -366,6 +386,37 @@ export const CampaignDetails: React.FC = () => {
     await refetch();
   };
 
+  const updateVolunteerTask = async (taskId: string, status: CampaignTaskStatus): Promise<void> => {
+    setUpdatingTaskId(taskId);
+    const result = await apiClient.patch<{ success: boolean }>(`/api/voluntario/tarefas/${taskId}/progresso`, {
+      status,
+      hours: 0,
+    });
+    setUpdatingTaskId(null);
+
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success('Status atualizado na sua tarefa.');
+    await refetch();
+  };
+
+  const handleTaskStatusChange = async (task: CampaignTaskWorkspace, status: CampaignTaskStatus): Promise<void> => {
+    if (!canEditTask(task)) {
+      toast.error('Voce so pode atualizar tarefas atribuidas a voce.');
+      return;
+    }
+
+    if (isCoordinatorProfile) {
+      await updateTask(task.id, { status });
+      return;
+    }
+
+    await updateVolunteerTask(task.id, status);
+  };
+
   const submitCreate = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     if (!id) return;
@@ -433,26 +484,34 @@ export const CampaignDetails: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <Link to="/coordinator/campaigns" className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-300 mb-3">
+          <Link to={backToCampaignsPath} className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-300 mb-3">
             <ArrowLeft className="w-4 h-4" />
-            Voltar para campanhas
+            {backToCampaignsLabel}
           </Link>
           <h1 className="text-3xl font-black text-white">{campanha.name}</h1>
           <p className="text-zinc-400">{(campanha.office || '').replaceAll('_', ' ')} - {campanha.candidate_name}</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowCreate((value) => !value)}
-            className="px-4 py-2 rounded-xl bg-[#F5C400] text-black font-bold hover:bg-[#e8b800] inline-flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Nova tarefa
-          </button>
-          <button className="px-4 py-2 rounded-xl bg-zinc-800 text-white font-semibold hover:bg-zinc-700 inline-flex items-center gap-2">
-            <Settings className="w-4 h-4" />
-            Configuracoes
-          </button>
+          {isCoordinatorProfile ? (
+            <>
+              <button
+                onClick={() => setShowCreate((value) => !value)}
+                className="px-4 py-2 rounded-xl bg-[#F5C400] text-black font-bold hover:bg-[#e8b800] inline-flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Nova tarefa
+              </button>
+              <button className="px-4 py-2 rounded-xl bg-zinc-800 text-white font-semibold hover:bg-zinc-700 inline-flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                Configuracoes
+              </button>
+            </>
+          ) : (
+            <span className="px-3 py-2 rounded-xl border border-white/10 text-xs text-zinc-400">
+              Voce pode atualizar apenas tarefas atribuidas a voce.
+            </span>
+          )}
         </div>
       </header>
 
@@ -481,7 +540,11 @@ export const CampaignDetails: React.FC = () => {
                     <h3 className="font-semibold text-white">{sector.name}</h3>
                     <p className="text-xs text-zinc-500">{sector.members_count ?? 0} membros</p>
                   </div>
-                  <Link to={`/coordinator/campaign/${id}/sector/${sector.slug}/rh`} className="text-xs px-2 py-1 rounded-md border border-white/10 text-zinc-300 hover:text-white">RH</Link>
+                  {isCoordinatorProfile ? (
+                    <Link to={`/coordinator/campaign/${id}/sector/${sector.slug}/rh`} className="text-xs px-2 py-1 rounded-md border border-white/10 text-zinc-300 hover:text-white">RH</Link>
+                  ) : (
+                    <span className="text-[10px] px-2 py-1 rounded-md border border-white/10 text-zinc-500">Leitura</span>
+                  )}
                 </div>
                 <div className="mt-2 h-1.5 rounded-full bg-zinc-800 overflow-hidden"><div className="h-full" style={{ width: `${rate}%`, backgroundColor: sector.color || '#F5C400' }} /></div>
                 <p className="mt-2 text-[11px] text-zinc-400">{done}/{total} concluidas</p>
@@ -542,7 +605,7 @@ export const CampaignDetails: React.FC = () => {
         </article>
       </section>
 
-      {showCreate ? (
+      {showCreate && isCoordinatorProfile ? (
         <section className="rounded-2xl border border-[#F5C400]/40 bg-[#0f0f0f] p-5">
           <h2 className="text-lg font-bold text-white mb-4">Nova tarefa</h2>
           <form onSubmit={(event) => void submitCreate(event)} className="grid gap-3 lg:grid-cols-2">
@@ -647,7 +710,7 @@ export const CampaignDetails: React.FC = () => {
               icone={<Target className="w-5 h-5" />}
               titulo="Nenhuma tarefa encontrada"
               subtitulo="Ajuste os filtros ou crie uma nova tarefa."
-              acao={{ label: 'Criar tarefa', onClick: () => setShowCreate(true) }}
+              acao={isCoordinatorProfile ? { label: 'Criar tarefa', onClick: () => setShowCreate(true) } : undefined}
             />
           ) : viewMode === 'board' ? (
             <div className="grid gap-3 xl:grid-cols-4">
@@ -672,18 +735,22 @@ export const CampaignDetails: React.FC = () => {
                         <p className="mt-1 text-[11px] text-zinc-400">{task.assigned_to_name ?? 'Nao atribuido'}</p>
                         <p className="mt-1 text-[11px] text-zinc-400">XP: {task.xp_reward ?? 0}</p>
                         <p className={cn('text-[11px] mt-1', isLate(task.deadline, task.status) ? 'text-red-300' : 'text-zinc-500')}>{formatDate(task.deadline)}</p>
-                        <select
-                          aria-label={`Atualizar status da tarefa ${task.title}`}
-                          value={task.status}
-                          disabled={updatingTaskId === task.id}
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={(event) => {
-                            void updateTask(task.id, { status: event.target.value });
-                          }}
-                          className="mt-2 w-full rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
-                        >
-                          {COLUMNS.map((option) => <option key={option.key} value={option.key}>{statusLabel[option.key]}</option>)}
-                        </select>
+                        {canEditTask(task) ? (
+                          <select
+                            aria-label={`Atualizar status da tarefa ${task.title}`}
+                            value={task.status}
+                            disabled={updatingTaskId === task.id}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => {
+                              void handleTaskStatusChange(task, event.target.value as CampaignTaskStatus);
+                            }}
+                            className="mt-2 w-full rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
+                          >
+                            {COLUMNS.map((option) => <option key={option.key} value={option.key}>{statusLabel[option.key]}</option>)}
+                          </select>
+                        ) : (
+                          <p className="mt-2 text-[11px] text-zinc-500">Somente leitura</p>
+                        )}
                       </article>
                     ))}
                   </div>
@@ -707,18 +774,22 @@ export const CampaignDetails: React.FC = () => {
                       <td className={cn('py-2 pr-2', isLate(task.deadline, task.status) ? 'text-red-300' : 'text-zinc-300')}>{formatDate(task.deadline)}</td>
                       <td className="py-2 pr-2 text-zinc-300">{task.xp_reward ?? 0}</td>
                       <td className="py-2 pr-2">
-                        <select
-                          aria-label={`Atualizar status da tarefa ${task.title}`}
-                          value={task.status}
-                          disabled={updatingTaskId === task.id}
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={(event) => {
-                            void updateTask(task.id, { status: event.target.value });
-                          }}
-                          className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
-                        >
-                          {COLUMNS.map((option) => <option key={option.key} value={option.key}>{statusLabel[option.key]}</option>)}
-                        </select>
+                        {canEditTask(task) ? (
+                          <select
+                            aria-label={`Atualizar status da tarefa ${task.title}`}
+                            value={task.status}
+                            disabled={updatingTaskId === task.id}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => {
+                              void handleTaskStatusChange(task, event.target.value as CampaignTaskStatus);
+                            }}
+                            className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
+                          >
+                            {COLUMNS.map((option) => <option key={option.key} value={option.key}>{statusLabel[option.key]}</option>)}
+                          </select>
+                        ) : (
+                          <span className="text-xs text-zinc-500">Somente leitura</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -793,8 +864,16 @@ export const CampaignDetails: React.FC = () => {
                 <div className="rounded-lg border border-white/10 bg-black/30 p-2"><p className="text-zinc-500">XP</p><p className="text-zinc-100 font-semibold">{selectedTask.xp_reward ?? 0}</p></div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => void updateTask(selectedTask.id, { status: 'CONCLUIDA' })} disabled={selectedTask.status === 'CONCLUIDA'} className="px-3 py-2 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-1"><CheckCircle2 className="w-3 h-3" />Concluir</button>
-                <Link to={`/coordinator/campaign/${id}/sector/${selectedTask.sector_slug}/rh`} className="px-3 py-2 rounded-lg border border-white/10 text-zinc-200 text-xs font-semibold inline-flex justify-center items-center gap-1"><Users className="w-3 h-3" />Ver RH</Link>
+                {canEditTask(selectedTask) ? (
+                  <button onClick={() => void handleTaskStatusChange(selectedTask, 'CONCLUIDA')} disabled={selectedTask.status === 'CONCLUIDA'} className="px-3 py-2 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold disabled:opacity-50 inline-flex justify-center items-center gap-1"><CheckCircle2 className="w-3 h-3" />Concluir</button>
+                ) : (
+                  <span className="px-3 py-2 rounded-lg border border-white/10 text-zinc-500 text-xs inline-flex justify-center items-center">Sem permissao de edicao</span>
+                )}
+                {isCoordinatorProfile ? (
+                  <Link to={`/coordinator/campaign/${id}/sector/${selectedTask.sector_slug}/rh`} className="px-3 py-2 rounded-lg border border-white/10 text-zinc-200 text-xs font-semibold inline-flex justify-center items-center gap-1"><Users className="w-3 h-3" />Ver RH</Link>
+                ) : (
+                  <span className="px-3 py-2 rounded-lg border border-white/10 text-zinc-500 text-xs inline-flex justify-center items-center">Painel RH indisponivel</span>
+                )}
               </div>
             </div>
           ) : (
@@ -805,4 +884,30 @@ export const CampaignDetails: React.FC = () => {
     </div>
   );
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

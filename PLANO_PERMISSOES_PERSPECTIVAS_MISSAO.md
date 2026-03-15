@@ -20,7 +20,7 @@ Conclusao: hoje ha base funcional para organizacao de campanha, mas falta camada
 Estruturar a plataforma para suportar:
 - Administradores nacionais, estaduais e regionais.
 - Pre-candidato e chefe de campanha.
-- Lideres setoriais (tecnologia, RH, financeiro etc).
+- Lideres setoriais de cada campnha (tecnologia, RH, financeiro etc). 
 - Militancia (publico mais aberto).
 - Voluntarios (com tarefas e responsabilidades internas).
 

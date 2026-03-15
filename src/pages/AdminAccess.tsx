@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../lib/api-client.ts';
 import { useAuth, type UserRole } from '../components/AuthContext.tsx';
+import { getRoleHomePath } from '../lib/navigation.ts';
 
 interface DevBinding {
   role: string;
@@ -39,19 +40,6 @@ interface DevUsersResponse {
   users: DevUser[];
 }
 
-const coordinatorRoles = new Set<string>([
-  'COORDENADOR_MUNICIPAL',
-  'COORDENADOR_ESTADUAL',
-  'ADMIN',
-  'ADMIN_NACIONAL',
-  'ADMIN_ESTADUAL',
-  'ADMIN_REGIONAL',
-  'PRE_CANDIDATO',
-  'CHEFE_CAMPANHA',
-  'COORDENADOR_CAMPANHA',
-  'LIDER_SETOR',
-]);
-
 const staticCredentials = [
   { perfil: 'Admin Nacional', email: 'admin@missao.com.br', senha: 'Missao@2025', painel: '/coordinator' },
   { perfil: 'Chefe de Campanha', email: 'chefe@missao.com.br', senha: 'Campanha@2025', painel: '/coordinator' },
@@ -77,7 +65,7 @@ const roleBadgeClass: Record<string, string> = {
 };
 
 function resolveStartRoute(role: string): string {
-  return coordinatorRoles.has(role.toUpperCase()) ? '/coordinator' : '/';
+  return getRoleHomePath(role);
 }
 
 export const AdminAccess: React.FC = () => {
@@ -344,3 +332,4 @@ export const AdminAccess: React.FC = () => {
     </div>
   );
 };
+

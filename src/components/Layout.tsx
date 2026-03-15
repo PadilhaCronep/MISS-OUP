@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Award, Bell, BookOpen, Compass, Home, LogOut, Map, Menu, Settings, Target, Trophy, Users, X } from 'lucide-react';
+import { Award, Bell, BookOpen, Compass, Home, LogOut, Map as MapIcon, Menu, Settings, Target, Trophy, Users, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from './AuthContext.tsx';
 import { NotificacoesDrawer } from './voluntario/NotificacoesDrawer.tsx';
 import { Breadcrumb } from './layout/Breadcrumb.tsx';
 import { apiClient } from '../lib/api-client.ts';
 import { useNotificacoes } from '../hooks/useNotificacoes.ts';
+import { isCandidatePanelRole, isCoordinatorRole } from '../lib/role-groups.ts';
+import { buildWorkspaceShortcuts, getRoleHomePath } from '../lib/navigation.ts';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
@@ -48,36 +50,74 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     };
   }, [user]);
 
+  const workspaceShortcuts = useMemo(
+    () => buildWorkspaceShortcuts(user?.role, isCampaignMember),
+    [user?.role, isCampaignMember],
+  );
+
   const navItems = useMemo(() => {
     const items = [
-      { name: 'Arena', path: '/', icon: Trophy },
-      { name: 'Engajamento', path: '/engajamento', icon: Target },
-      { name: 'Dashboard', path: '/dashboard', icon: Home },
-      { name: 'Mapa', path: '/map', icon: Map },
-      { name: 'Guia Inicial', path: '/guia-inicial', icon: Compass },
-      { name: 'Formacao', path: '/voluntario/formacao', icon: BookOpen },
-      { name: 'Conquistas', path: '/badges', icon: Award },
+      { name: 'Minha Visao', path: '/inicio', icon: Compass, group: 'workspace' },
+      { name: 'Arena', path: '/', icon: Trophy, group: 'base' },
+      { name: 'Engajamento', path: '/engajamento', icon: Target, group: 'base' },
+      { name: 'Dashboard', path: '/dashboard', icon: Home, group: 'base' },
+      { name: 'Mapa', path: '/map', icon: MapIcon, group: 'base' },
+      { name: 'Guia Inicial', path: '/guia-inicial', icon: Compass, group: 'base' },
+      { name: 'Formacao', path: '/voluntario/formacao', icon: BookOpen, group: 'base' },
+      { name: 'Conquistas', path: '/badges', icon: Award, group: 'base' },
     ];
 
     if (isCampaignMember) {
-      items.push({ name: 'Campanhas', path: '/voluntario/campanhas', icon: Users });
-      items.push({ name: 'Minha Funcao', path: '/voluntario/funcao', icon: Settings });
+      items.push({ name: 'Campanhas', path: '/voluntario/campanhas', icon: Users, group: 'operacao' });
+      items.push({ name: 'Minha Funcao', path: '/voluntario/funcao', icon: Settings, group: 'operacao' });
     }
 
-    if (
-      user &&
-      ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'].includes(user.role)
-    ) {
-      items.push({ name: 'Coordenacao', path: '/coordinator', icon: Users });
+    if (user && isCandidatePanelRole(user.role)) {
+      items.push({ name: 'Candidato', path: '/candidato', icon: Compass, group: 'lideranca' });
+    }
+
+    if (user && isCoordinatorRole(user.role)) {
+      items.push({ name: 'Coordenacao', path: '/coordinator', icon: Users, group: 'lideranca' });
     }
 
     return items;
   }, [isCampaignMember, user]);
 
-  const mobileQuickItems = useMemo(
-    () => navItems.filter((item) => ['/', '/engajamento', '/dashboard', '/map'].includes(item.path)).slice(0, 4),
-    [navItems],
-  );
+  const groupedNavItems = useMemo(() => {
+    const groups = [
+      { id: 'workspace', label: 'Visao Atual' },
+      { id: 'base', label: 'Base da Plataforma' },
+      { id: 'operacao', label: 'Operacao de Campanha' },
+      { id: 'lideranca', label: 'Lideranca' },
+    ] as const;
+
+    return groups
+      .map((group) => ({
+        ...group,
+        items: navItems.filter((item) => item.group === group.id),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [navItems]);
+
+  const mobileQuickItems = useMemo(() => {
+    const preferredPaths = [
+      getRoleHomePath(user?.role),
+      '/map',
+      '/engajamento',
+      '/voluntario/campanhas',
+      '/coordinator',
+      '/candidato',
+      '/dashboard',
+    ];
+
+    const quick = preferredPaths
+      .map((path) => navItems.find((item) => item.path === path))
+      .filter((item): item is (typeof navItems)[number] => Boolean(item));
+
+    const uniqueByPath = new Map(quick.map((item) => [item.path, item]));
+
+    return Array.from(uniqueByPath.values()).slice(0, 4);
+  }, [navItems, user?.role]);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -127,24 +167,55 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </button>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 mt-4">
-          {navItems.map((item) => {
-            const isActive = isPathActive(item.path);
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                  isActive
-                    ? 'bg-[#F5C400] text-zinc-900 font-medium'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                {item.name}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto px-4 pb-4 pt-3">
+          <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-800/40 p-3">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Acesso Rapido</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {workspaceShortcuts.map((shortcut) => {
+                const active = isPathActive(shortcut.path);
+                return (
+                  <Link
+                    key={shortcut.id}
+                    to={shortcut.path}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      active
+                        ? 'border-[#F5C400] bg-[#F5C400] text-zinc-900'
+                        : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    {shortcut.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {groupedNavItems.map((group) => (
+              <div key={group.id}>
+                <p className="mb-1 px-1 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">{group.label}</p>
+                <div className="space-y-1">
+                  {group.items.map((item) => {
+                    const isActive = isPathActive(item.path);
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                          isActive
+                            ? 'bg-[#F5C400] text-zinc-900 font-medium'
+                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+                        }`}
+                      >
+                        <item.icon className="w-5 h-5" />
+                        {item.name}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         </nav>
 
         <div className="p-4 border-t border-zinc-800">
@@ -235,25 +306,57 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   </div>
                 </div>
 
-                <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-                  {navItems.map((item) => {
-                    const active = isPathActive(item.path);
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
-                          active
-                            ? 'bg-[#F5C400] text-zinc-950'
-                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
-                        }`}
-                      >
-                        <item.icon className="h-5 w-5" />
-                        {item.name}
-                      </Link>
-                    );
-                  })}
+                <nav className="flex-1 overflow-y-auto px-3 py-4">
+                  <div className="mb-4 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Acesso Rapido</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {workspaceShortcuts.map((shortcut) => {
+                        const active = isPathActive(shortcut.path);
+                        return (
+                          <Link
+                            key={shortcut.id}
+                            to={shortcut.path}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                              active
+                                ? 'border-[#F5C400] bg-[#F5C400] text-zinc-950'
+                                : 'border-zinc-700 bg-zinc-900 text-zinc-300'
+                            }`}
+                          >
+                            {shortcut.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {groupedNavItems.map((group) => (
+                      <div key={group.id}>
+                        <p className="mb-1 px-1 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600">{group.label}</p>
+                        <div className="space-y-1">
+                          {group.items.map((item) => {
+                            const active = isPathActive(item.path);
+                            return (
+                              <Link
+                                key={item.path}
+                                to={item.path}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
+                                  active
+                                    ? 'bg-[#F5C400] text-zinc-950'
+                                    : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                                }`}
+                              >
+                                <item.icon className="h-5 w-5" />
+                                {item.name}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </nav>
 
                 <div className="space-y-2 border-t border-zinc-800 px-3 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3">

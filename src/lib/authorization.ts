@@ -1,11 +1,19 @@
 export type AccessRole =
+  | 'SUPER_ADMIN'
   | 'ADMIN_NACIONAL'
+  | 'DIRECAO_PARTIDARIA'
   | 'ADMIN_ESTADUAL'
   | 'ADMIN_REGIONAL'
   | 'PRE_CANDIDATO'
+  | 'CANDIDATO'
   | 'CHEFE_CAMPANHA'
+  | 'CHEFE_REDES'
+  | 'CHEFE_LEADS'
+  | 'CHEFE_PROGRAMACAO'
   | 'COORDENADOR_CAMPANHA'
+  | 'COORDENADOR_TERRITORIAL'
   | 'LIDER_SETOR'
+  | 'OPERADOR_AREA'
   | 'MEMBRO_SETOR'
   | 'MILITANTE'
   | 'VOLUNTARIO';
@@ -36,23 +44,55 @@ export interface AuthActor {
   bindings: AccessBinding[];
 }
 
-const NATIONAL_ROLES = new Set<AccessRole>(['ADMIN_NACIONAL']);
+const NATIONAL_ROLES = new Set<AccessRole>(['SUPER_ADMIN', 'ADMIN_NACIONAL', 'DIRECAO_PARTIDARIA']);
 const COORDINATOR_ROLES = new Set<AccessRole>([
+  'SUPER_ADMIN',
   'ADMIN_NACIONAL',
+  'DIRECAO_PARTIDARIA',
   'ADMIN_ESTADUAL',
   'ADMIN_REGIONAL',
   'PRE_CANDIDATO',
+  'CANDIDATO',
   'CHEFE_CAMPANHA',
+  'CHEFE_REDES',
+  'CHEFE_LEADS',
+  'CHEFE_PROGRAMACAO',
   'COORDENADOR_CAMPANHA',
+  'COORDENADOR_TERRITORIAL',
   'LIDER_SETOR',
 ]);
 
+const ROLE_HIERARCHY_INDEX: Record<AccessRole, number> = {
+  SUPER_ADMIN: 1,
+  ADMIN_NACIONAL: 2,
+  DIRECAO_PARTIDARIA: 3,
+  ADMIN_ESTADUAL: 4,
+  ADMIN_REGIONAL: 5,
+  PRE_CANDIDATO: 6,
+  CANDIDATO: 7,
+  CHEFE_CAMPANHA: 8,
+  CHEFE_REDES: 9,
+  CHEFE_LEADS: 9,
+  CHEFE_PROGRAMACAO: 9,
+  COORDENADOR_CAMPANHA: 10,
+  COORDENADOR_TERRITORIAL: 11,
+  LIDER_SETOR: 12,
+  OPERADOR_AREA: 13,
+  MEMBRO_SETOR: 14,
+  MILITANTE: 15,
+  VOLUNTARIO: 16,
+};
+
 export function normalizeRole(input: string | null | undefined): AccessRole {
   switch ((input || '').trim().toUpperCase()) {
-    case 'ADMIN_NACIONAL':
     case 'SUPER_ADMIN':
+      return 'SUPER_ADMIN';
+    case 'ADMIN_NACIONAL':
     case 'ADMIN':
       return 'ADMIN_NACIONAL';
+    case 'DIRECAO_PARTIDARIA':
+    case 'DIRECAO':
+      return 'DIRECAO_PARTIDARIA';
     case 'ADMIN_ESTADUAL':
     case 'COORDENADOR_ESTADUAL':
       return 'ADMIN_ESTADUAL';
@@ -65,12 +105,27 @@ export function normalizeRole(input: string | null | undefined): AccessRole {
     case 'PRE_CANDIDATO_DEP_FEDERAL':
     case 'PRE_CANDIDATO_DEP_ESTADUAL':
       return 'PRE_CANDIDATO';
+    case 'CANDIDATO':
+      return 'CANDIDATO';
     case 'CHEFE_CAMPANHA':
       return 'CHEFE_CAMPANHA';
+    case 'CHEFE_REDES':
+      return 'CHEFE_REDES';
+    case 'CHEFE_LEADS':
+      return 'CHEFE_LEADS';
+    case 'CHEFE_PROGRAMACAO':
+    case 'CHEFE_PROGRAMAÇÃO':
+      return 'CHEFE_PROGRAMACAO';
     case 'COORDENADOR_CAMPANHA':
       return 'COORDENADOR_CAMPANHA';
+    case 'COORDENADOR_TERRITORIAL':
+    case 'COORDENADOR_LOCAL':
+      return 'COORDENADOR_TERRITORIAL';
     case 'LIDER_SETOR':
       return 'LIDER_SETOR';
+    case 'OPERADOR_AREA':
+    case 'OPERADOR_DE_AREA':
+      return 'OPERADOR_AREA';
     case 'MEMBRO_SETOR':
       return 'MEMBRO_SETOR';
     case 'MILITANTE':
@@ -126,6 +181,38 @@ export function parseCampaignState(configuration: unknown): string | null {
 export function hasRole(actor: AuthActor, roles: AccessRole[]): boolean {
   const roleSet = new Set(roles);
   return actor.bindings.some((binding) => roleSet.has(binding.role));
+}
+
+export function getRoleHierarchyLevel(role: AccessRole): number {
+  return ROLE_HIERARCHY_INDEX[role];
+}
+
+export function getPrimaryRole(actor: AuthActor): AccessRole {
+  const sorted = [...actor.bindings].sort(
+    (a, b) => getRoleHierarchyLevel(a.role) - getRoleHierarchyLevel(b.role),
+  );
+
+  return sorted[0]?.role ?? 'VOLUNTARIO';
+}
+
+export function canManageRole(actor: AuthActor, targetRole: AccessRole): boolean {
+  const actorPrimary = getPrimaryRole(actor);
+
+  if (hasNationalAccess(actor)) return true;
+  return getRoleHierarchyLevel(actorPrimary) < getRoleHierarchyLevel(targetRole);
+}
+
+export function canSendHierarchicalMessage(actor: AuthActor, targetRole: AccessRole): boolean {
+  const actorPrimary = getPrimaryRole(actor);
+
+  if (targetRole === actorPrimary) return true;
+  if (hasNationalAccess(actor)) return true;
+
+  if (actorPrimary === 'CANDIDATO') {
+    return ['CHEFE_CAMPANHA', 'CHEFE_REDES', 'CHEFE_LEADS', 'CHEFE_PROGRAMACAO', 'COORDENADOR_CAMPANHA'].includes(targetRole);
+  }
+
+  return getRoleHierarchyLevel(actorPrimary) < getRoleHierarchyLevel(targetRole);
 }
 
 export function hasNationalAccess(actor: AuthActor): boolean {
@@ -252,5 +339,3 @@ export function buildActor(params: {
     bindings: normalizedBindings,
   };
 }
-
-

@@ -18,6 +18,7 @@ import {
   type AuthActor,
 } from '../lib/authorization.js';
 import { COORDENADAS_CIDADES, classificarCidade } from '../lib/mapa-dados.js';
+import { campaignOsRouter } from './campaign-os.js';
 import {
   calcularScoresTerritorial,
   gerarRecomendacaoMensal,
@@ -72,6 +73,8 @@ apiRouter.use((req, res, next) => {
 
   requireAuth(req as AuthRequest, res, next);
 });
+
+apiRouter.use('/campaign-os', campaignOsRouter);
 
 function getActor(req: AuthRequest): AuthActor {
   if (!req.auth) {
@@ -161,7 +164,7 @@ function ensureBindingsForUserRow(user: { id: string; role?: string | null; stat
   const role = (user.role || 'VOLUNTARIO').toUpperCase();
   const isPreCandidate = role === 'PRE_CANDIDATO' || role.startsWith('PRE_CANDIDATO_');
 
-  if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'ADMIN_NACIONAL') {
+  if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'ADMIN_NACIONAL' || role === 'DIRECAO_PARTIDARIA') {
     ensureAccessBinding(user.id, 'ADMIN_NACIONAL', 'NACIONAL', null);
     return;
   }
@@ -184,7 +187,7 @@ function ensureBindingsForUserRow(user: { id: string; role?: string | null; stat
     return;
   }
 
-  if (role === 'CHEFE_CAMPANHA' || role === 'COORDENADOR_CAMPANHA') {
+  if (role === 'CHEFE_CAMPANHA' || role === 'COORDENADOR_CAMPANHA' || role === 'CHEFE_REDES' || role === 'CHEFE_LEADS' || role === 'CHEFE_PROGRAMACAO') {
     ensureAccessBinding(
       user.id,
       role,
@@ -193,7 +196,13 @@ function ensureBindingsForUserRow(user: { id: string; role?: string | null; stat
     );
     return;
   }
-
+  if (role === 'CANDIDATO') {
+    if (user.state) {
+      ensureAccessBinding(user.id, 'CANDIDATO', 'ESTADUAL', user.state.toUpperCase());
+    }
+    ensureAccessBinding(user.id, 'CANDIDATO', 'PROPRIO_USUARIO', user.id);
+    return;
+  }
   if (role === 'LIDER_SETOR' || role === 'MEMBRO_SETOR') {
     if (user.state) {
       ensureAccessBinding(user.id, role, 'ESTADUAL', user.state.toUpperCase());
@@ -202,14 +211,20 @@ function ensureBindingsForUserRow(user: { id: string; role?: string | null; stat
     return;
   }
 
-  if (role === 'COORDENADOR_MUNICIPAL' || role === 'ADMIN_REGIONAL') {
+  if (role === 'COORDENADOR_MUNICIPAL' || role === 'ADMIN_REGIONAL' || role === 'COORDENADOR_TERRITORIAL') {
     ensureAccessBinding(user.id, 'ADMIN_REGIONAL', 'MUNICIPAL', user.city ?? null);
     if (user.state) {
       ensureAccessBinding(user.id, 'ADMIN_REGIONAL', 'ESTADUAL', user.state.toUpperCase());
     }
     return;
   }
-
+  if (role === 'OPERADOR_AREA') {
+    if (user.state) {
+      ensureAccessBinding(user.id, 'OPERADOR_AREA', 'ESTADUAL', user.state.toUpperCase());
+    }
+    ensureAccessBinding(user.id, 'OPERADOR_AREA', 'PROPRIO_USUARIO', user.id);
+    return;
+  }
   if (role === 'LIDER_EMERGENTE' || role === 'MILITANTE') {
     ensureAccessBinding(user.id, 'MILITANTE', 'PROPRIO_USUARIO', user.id);
     return;
@@ -4352,6 +4367,8 @@ async function seedFormacao() {
 
   return { tracks: tracks.length, modules: moduleCount };
 }
+
+
 
 
 

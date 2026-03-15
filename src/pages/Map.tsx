@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion } from 'motion/react';
 import { Crown, Flame, Rocket, Target, TrendingUp } from 'lucide-react';
@@ -46,6 +46,18 @@ interface ArenaResponse {
   estados: ArenaStateMetric[];
 }
 
+interface MockStateSeed {
+  state: string;
+  voluntarios: number;
+  voluntarios_novos_30d: number;
+  voluntarios_ativos_30d: number;
+  projetos: number;
+  tarefas_ativas: number;
+  tarefas_total: number;
+  seguidores: number;
+  ganho_seguidores_30d: number;
+}
+
 const STATE_NAME_TO_UF: Record<string, string> = {
   acre: 'AC',
   alagoas: 'AL',
@@ -76,6 +88,122 @@ const STATE_NAME_TO_UF: Record<string, string> = {
   tocantins: 'TO',
 };
 
+const STATE_CENTER_BY_UF: Record<string, [number, number]> = {
+  AC: [-8.77, -70.55],
+  AL: [-9.71, -35.73],
+  AP: [1.41, -51.77],
+  AM: [-3.47, -65.1],
+  BA: [-12.96, -41.57],
+  CE: [-5.2, -39.53],
+  DF: [-15.8, -47.9],
+  ES: [-19.19, -40.34],
+  GO: [-15.98, -49.86],
+  MA: [-4.96, -45.27],
+  MT: [-12.64, -55.42],
+  MS: [-20.51, -54.54],
+  MG: [-18.1, -44.38],
+  PA: [-3.79, -52.48],
+  PB: [-7.24, -36.78],
+  PR: [-24.89, -51.55],
+  PE: [-8.28, -35.07],
+  PI: [-8.28, -43.68],
+  RJ: [-22.84, -43.15],
+  RN: [-5.22, -36.52],
+  RS: [-30.17, -53.5],
+  RO: [-10.83, -63.34],
+  RR: [1.99, -61.33],
+  SC: [-27.33, -49.44],
+  SP: [-22.19, -48.79],
+  SE: [-10.9, -37.07],
+  TO: [-10.25, -48.25],
+};
+
+const MOCK_STATE_SEED: MockStateSeed[] = [
+  { state: 'SP', voluntarios: 1420, voluntarios_novos_30d: 196, voluntarios_ativos_30d: 1084, projetos: 42, tarefas_ativas: 118, tarefas_total: 248, seguidores: 81240, ganho_seguidores_30d: 6480 },
+  { state: 'RJ', voluntarios: 980, voluntarios_novos_30d: 132, voluntarios_ativos_30d: 706, projetos: 29, tarefas_ativas: 86, tarefas_total: 194, seguidores: 58710, ganho_seguidores_30d: 4890 },
+  { state: 'MG', voluntarios: 1140, voluntarios_novos_30d: 165, voluntarios_ativos_30d: 812, projetos: 34, tarefas_ativas: 101, tarefas_total: 219, seguidores: 69420, ganho_seguidores_30d: 5330 },
+  { state: 'BA', voluntarios: 890, voluntarios_novos_30d: 121, voluntarios_ativos_30d: 614, projetos: 23, tarefas_ativas: 72, tarefas_total: 171, seguidores: 49480, ganho_seguidores_30d: 4260 },
+  { state: 'RS', voluntarios: 760, voluntarios_novos_30d: 103, voluntarios_ativos_30d: 551, projetos: 21, tarefas_ativas: 64, tarefas_total: 152, seguidores: 45230, ganho_seguidores_30d: 3780 },
+  { state: 'PR', voluntarios: 810, voluntarios_novos_30d: 114, voluntarios_ativos_30d: 589, projetos: 24, tarefas_ativas: 68, tarefas_total: 164, seguidores: 47150, ganho_seguidores_30d: 4010 },
+  { state: 'SC', voluntarios: 620, voluntarios_novos_30d: 88, voluntarios_ativos_30d: 458, projetos: 17, tarefas_ativas: 52, tarefas_total: 124, seguidores: 36120, ganho_seguidores_30d: 2890 },
+  { state: 'PE', voluntarios: 690, voluntarios_novos_30d: 92, voluntarios_ativos_30d: 479, projetos: 19, tarefas_ativas: 58, tarefas_total: 139, seguidores: 38990, ganho_seguidores_30d: 3210 },
+  { state: 'CE', voluntarios: 640, voluntarios_novos_30d: 83, voluntarios_ativos_30d: 446, projetos: 18, tarefas_ativas: 55, tarefas_total: 132, seguidores: 37100, ganho_seguidores_30d: 3020 },
+  { state: 'GO', voluntarios: 530, voluntarios_novos_30d: 74, voluntarios_ativos_30d: 369, projetos: 15, tarefas_ativas: 44, tarefas_total: 109, seguidores: 31620, ganho_seguidores_30d: 2440 },
+  { state: 'DF', voluntarios: 460, voluntarios_novos_30d: 62, voluntarios_ativos_30d: 332, projetos: 14, tarefas_ativas: 42, tarefas_total: 96, seguidores: 29840, ganho_seguidores_30d: 2280 },
+  { state: 'PA', voluntarios: 570, voluntarios_novos_30d: 79, voluntarios_ativos_30d: 401, projetos: 16, tarefas_ativas: 47, tarefas_total: 118, seguidores: 33450, ganho_seguidores_30d: 2590 },
+];
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function buildMockArenaData(): ArenaResponse {
+  const metrics: ArenaStateMetric[] = MOCK_STATE_SEED.map((seed) => {
+    const metaVoluntarios = seed.voluntarios + Math.max(20, Math.round(seed.voluntarios * 0.15));
+    const metaProjetos = seed.projetos + Math.max(2, Math.round(seed.projetos * 0.2));
+    const metaSeguidores = seed.seguidores + Math.max(350, Math.round(seed.seguidores * 0.12));
+    const engagementRaw = seed.voluntarios > 0
+      ? Math.round(((seed.voluntarios_ativos_30d + seed.voluntarios_novos_30d) / (seed.voluntarios * 2)) * 100)
+      : 0;
+
+    return {
+      ...seed,
+      meta_voluntarios: metaVoluntarios,
+      meta_projetos: metaProjetos,
+      meta_seguidores: metaSeguidores,
+      engagement_score: clamp(engagementRaw, 0, 100),
+    };
+  });
+
+  const rankingSeguidores = [...metrics]
+    .sort((a, b) => b.seguidores - a.seguidores)
+    .slice(0, 10)
+    .map((item, index) => ({
+      ...item,
+      posicao: index + 1,
+    }));
+
+  const totals = metrics.reduce(
+    (acc, item) => {
+      acc.voluntarios += item.voluntarios;
+      acc.projetos += item.projetos;
+      acc.seguidores += item.seguidores;
+      acc.ganhoSeguidores30d += item.ganho_seguidores_30d;
+      acc.metaVoluntarios += item.meta_voluntarios;
+      acc.metaProjetos += item.meta_projetos;
+      acc.metaSeguidores += item.meta_seguidores;
+      return acc;
+    },
+    {
+      voluntarios: 0,
+      projetos: 0,
+      seguidores: 0,
+      ganhoSeguidores30d: 0,
+      metaVoluntarios: 0,
+      metaProjetos: 0,
+      metaSeguidores: 0,
+    },
+  );
+
+  const progress = {
+    voluntarios: totals.metaVoluntarios > 0 ? Math.round((totals.voluntarios / totals.metaVoluntarios) * 100) : 0,
+    projetos: totals.metaProjetos > 0 ? Math.round((totals.projetos / totals.metaProjetos) * 100) : 0,
+    seguidores: totals.metaSeguidores > 0 ? Math.round((totals.seguidores / totals.metaSeguidores) * 100) : 0,
+  };
+
+  return {
+    actorScope: 'NACIONAL',
+    resumo: {
+      ...totals,
+      progresso: progress,
+    },
+    ranking_seguidores: rankingSeguidores,
+    estados: metrics,
+  };
+}
+
+const MOCK_ARENA_DATA = buildMockArenaData();
+
 function normalizeName(value: string): string {
   return value
     .toLowerCase()
@@ -103,12 +231,22 @@ function metricFillColor(value: number, max: number): string {
   return '#7f1d1d';
 }
 
+async function fetchGeoData(): Promise<any> {
+  const response = await fetch(geoUrl);
+  if (!response.ok) {
+    throw new Error('Falha ao carregar mapa do Brasil');
+  }
+  return await response.json();
+}
+
 export const MapPage: React.FC = () => {
   const [arena, setArena] = useState<ArenaResponse | null>(null);
   const [geoData, setGeoData] = useState<any>(null);
   const [selectedState, setSelectedState] = useState<ArenaStateMetric | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataSourceMode, setDataSourceMode] = useState<'api' | 'mock'>('api');
+  const [mapSourceMode, setMapSourceMode] = useState<'geojson' | 'markers'>('geojson');
 
   useEffect(() => {
     let cancelled = false;
@@ -117,26 +255,49 @@ export const MapPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const [arenaResponse, geoResponse] = await Promise.all([
-        apiClient.get<ArenaResponse>('/api/arena/mapa-inicial'),
-        fetch(geoUrl).then(async (res) => {
-          if (!res.ok) throw new Error('Falha ao carregar mapa do Brasil');
-          return await res.json();
-        }),
-      ]);
+      try {
+        const [arenaResult, geoResult] = await Promise.allSettled([
+          apiClient.get<ArenaResponse>('/api/arena/mapa-inicial'),
+          fetchGeoData(),
+        ]);
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (arenaResponse.error || !arenaResponse.data) {
-        setError(arenaResponse.error ?? 'Falha ao carregar dados da competicao');
+        let resolvedArena = MOCK_ARENA_DATA;
+        if (
+          arenaResult.status === 'fulfilled'
+          && !arenaResult.value.error
+          && arenaResult.value.data
+          && arenaResult.value.data.estados.length > 0
+        ) {
+          resolvedArena = arenaResult.value.data;
+          setDataSourceMode('api');
+        } else {
+          setDataSourceMode('mock');
+        }
+
+        if (geoResult.status === 'fulfilled') {
+          setGeoData(geoResult.value);
+          setMapSourceMode('geojson');
+        } else {
+          setGeoData(null);
+          setMapSourceMode('markers');
+        }
+
+        setArena(resolvedArena);
+        setSelectedState(resolvedArena.ranking_seguidores[0] ?? resolvedArena.estados[0] ?? null);
         setLoading(false);
-        return;
-      }
+      } catch (loadError) {
+        if (cancelled) return;
 
-      setArena(arenaResponse.data);
-      setGeoData(geoResponse);
-      setSelectedState(arenaResponse.data.ranking_seguidores[0] ?? arenaResponse.data.estados[0] ?? null);
-      setLoading(false);
+        const message = loadError instanceof Error ? loadError.message : 'Falha ao carregar arena inicial';
+        setError(message);
+        setArena(MOCK_ARENA_DATA);
+        setSelectedState(MOCK_ARENA_DATA.ranking_seguidores[0] ?? MOCK_ARENA_DATA.estados[0] ?? null);
+        setDataSourceMode('mock');
+        setMapSourceMode('markers');
+        setLoading(false);
+      }
     };
 
     void load();
@@ -201,12 +362,29 @@ export const MapPage: React.FC = () => {
     return <div className="flex h-[70vh] items-center justify-center text-zinc-500">Carregando mapa da competicao...</div>;
   }
 
-  if (error || !arena) {
+  if (!arena) {
     return <div className="flex h-[70vh] items-center justify-center text-red-500">{error ?? 'Erro ao carregar mapa inicial'}</div>;
   }
 
   return (
     <div className="space-y-5 md:space-y-6">
+      {error ? (
+        <section className="rounded-2xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-xs text-red-100">
+          Nao foi possivel carregar dados em tempo real: {error}. Exibindo modo demonstracao no frontend.
+        </section>
+      ) : null}
+      {dataSourceMode === 'mock' ? (
+        <section className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
+          Modo demonstracao ativo: dados ficticios aplicados no frontend enquanto o backend da arena inicial e finalizado.
+        </section>
+      ) : null}
+
+      {mapSourceMode === 'markers' ? (
+        <section className="rounded-2xl border border-zinc-700 bg-zinc-900/70 px-4 py-3 text-xs text-zinc-300">
+          Mapa em modo simplificado: exibindo marcadores por estado ate a malha geografica carregar novamente.
+        </section>
+      ) : null}
+
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <article className="rounded-2xl border border-zinc-800 bg-[#111111] p-4 text-white">
           <p className="text-[11px] uppercase tracking-wider text-zinc-500">Voluntarios</p>
@@ -239,7 +417,38 @@ export const MapPage: React.FC = () => {
             />
             {geoData ? (
               <GeoJSON data={geoData} style={styleFeature as any} onEachFeature={onEachFeature} />
-            ) : null}
+            ) : (
+              arena.estados.map((row) => {
+                const center = STATE_CENTER_BY_UF[row.state];
+                if (!center) return null;
+
+                const isSelected = selectedState?.state === row.state;
+                return (
+                  <CircleMarker
+                    key={row.state}
+                    center={center}
+                    radius={isSelected ? 11 : 8}
+                    pathOptions={{
+                      color: '#161616',
+                      weight: isSelected ? 2 : 1,
+                      fillColor: metricFillColor(row.seguidores, maxFollowers),
+                      fillOpacity: 0.86,
+                    }}
+                    eventHandlers={{
+                      click: () => setSelectedState(row),
+                    }}
+                  >
+                    <Popup>
+                      <div className="space-y-1 text-xs">
+                        <p className="font-semibold">{row.state}</p>
+                        <p>Seguidores: {row.seguidores}</p>
+                        <p>Voluntarios: {row.voluntarios}</p>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
+                );
+              })
+            )}
           </MapContainer>
         </div>
 

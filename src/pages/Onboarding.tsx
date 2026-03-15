@@ -3,6 +3,7 @@ import { useAuth } from '../components/AuthContext.tsx';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowRight, CheckCircle2, MapPin, User, Briefcase, Zap, Target, Eye, EyeOff, Search, Loader2 } from 'lucide-react';
+import { getRoleHomePath } from '../lib/navigation.ts';
 
 const STATES = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
@@ -522,19 +523,13 @@ export const Onboarding: React.FC = () => {
         e.preventDefault();
         setLoading(true);
         try {
-          const result = await login(formData.email, formData.password);
-          // The login function in AuthContext already sets the user and localStorage
-          // We can use the user from useAuth or just check localStorage again
+          await login(formData.email, formData.password);
           const storedUser = localStorage.getItem('missao_user');
           if (storedUser) {
-            const user = JSON.parse(storedUser);
-            if (['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'].includes(user.role)) {
-              navigate('/coordinator');
-            } else {
-              navigate('/');
-            }
+            const parsedUser = JSON.parse(storedUser) as { role?: string };
+            navigate(getRoleHomePath(parsedUser.role ?? null));
           } else {
-            navigate('/');
+            navigate('/inicio');
           }
         } catch (error: any) {
           alert(error.message || 'Erro ao fazer login. Verifique suas credenciais.');
@@ -599,7 +594,7 @@ export const Onboarding: React.FC = () => {
       </div>
       <h2 className="text-4xl font-black text-white mb-4">Bem-vindo à Missão</h2>
       <p className="text-zinc-400 mb-10 text-lg leading-relaxed">Sua primeira missão já está disponível. Vamos começar a construir a infraestrutura do movimento.</p>
-      <button onClick={() => navigate('/')} className="w-full bg-[#F5C400] text-zinc-900 font-black py-5 px-6 rounded-2xl hover:bg-[#e0b300] transition-all text-xl shadow-lg active:scale-[0.98]">
+      <button onClick={() => navigate(getRoleHomePath(user?.role ?? null))} className="w-full bg-[#F5C400] text-zinc-900 font-black py-5 px-6 rounded-2xl hover:bg-[#e0b300] transition-all text-xl shadow-lg active:scale-[0.98]">
         ACESSAR DASHBOARD
       </button>
     </motion.div>
@@ -618,4 +613,5 @@ export const Onboarding: React.FC = () => {
     </div>
   );
 };
+
 

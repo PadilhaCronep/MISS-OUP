@@ -32,6 +32,7 @@ import { apiClient } from '../../lib/api-client.ts';
 import { useToast } from '../../components/ui/ToastProvider.tsx';
 import { useAuth } from '../../components/AuthContext.tsx';
 import { cn } from '../../lib/cn.ts';
+import { isCoordinatorRole } from '../../lib/role-groups.ts';
 
 type ViewMode = 'board' | 'list' | 'calendar';
 
@@ -129,19 +130,6 @@ const buildMonthGrid = (monthRef: Date): Date[] => {
 const monthTitle = (monthRef: Date): string =>
   monthRef.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-const COORDINATOR_ROLES = new Set([
-  'COORDENADOR_MUNICIPAL',
-  'COORDENADOR_ESTADUAL',
-  'ADMIN',
-  'ADMIN_NACIONAL',
-  'ADMIN_ESTADUAL',
-  'ADMIN_REGIONAL',
-  'PRE_CANDIDATO',
-  'CHEFE_CAMPANHA',
-  'COORDENADOR_CAMPANHA',
-  'LIDER_SETOR',
-]);
-
 export const CampaignDetails: React.FC = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -179,7 +167,7 @@ export const CampaignDetails: React.FC = () => {
 
   const searchDebounced = useDebounce(search, 250);
 
-  const isCoordinatorProfile = Boolean(user && COORDINATOR_ROLES.has(user.role));
+  const isCoordinatorProfile = Boolean(user && isCoordinatorRole(user.role));
   const backToCampaignsPath = isCoordinatorProfile ? '/coordinator/campaigns' : '/voluntario/campanhas';
   const backToCampaignsLabel = isCoordinatorProfile ? 'Voltar para campanhas' : 'Voltar para minhas campanhas';
 
@@ -884,6 +872,7 @@ export const CampaignDetails: React.FC = () => {
     </div>
   );
 };
+
 
 
 

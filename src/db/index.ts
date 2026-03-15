@@ -456,7 +456,173 @@ export function setupDb() {
       voluntarios_count INTEGER DEFAULT 0,
       UNIQUE(cidade, estado)
     );
+    CREATE TABLE IF NOT EXISTS campaign_timeline_events (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      severity TEXT DEFAULT 'INFO',
+      source_area TEXT,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'ABERTO',
+      event_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id)
+    );
 
+    CREATE TABLE IF NOT EXISTS campaign_social_metrics (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      collected_at DATETIME NOT NULL,
+      media_type TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      format TEXT NOT NULL,
+      demographic_group TEXT,
+      hour_slot INTEGER,
+      reach INTEGER DEFAULT 0,
+      impressions INTEGER DEFAULT 0,
+      engagements INTEGER DEFAULT 0,
+      comments INTEGER DEFAULT 0,
+      shares INTEGER DEFAULT 0,
+      saves INTEGER DEFAULT 0,
+      followers_growth INTEGER DEFAULT 0,
+      spend REAL DEFAULT 0,
+      clicks INTEGER DEFAULT 0,
+      leads INTEGER DEFAULT 0,
+      conversions INTEGER DEFAULT 0,
+      cpc REAL DEFAULT 0,
+      cpm REAL DEFAULT 0,
+      ctr REAL DEFAULT 0,
+      cpl REAL DEFAULT 0,
+      cost_per_supporter REAL DEFAULT 0,
+      cost_per_volunteer REAL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS campaign_leads (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      city TEXT,
+      state TEXT,
+      neighborhood TEXT,
+      source TEXT NOT NULL,
+      interest TEXT,
+      tags TEXT DEFAULT '[]',
+      status TEXT NOT NULL,
+      engagement_level INTEGER DEFAULT 0,
+      entered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_status_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      territory_ref TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS campaign_whatsapp_groups (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      admins_json TEXT DEFAULT '[]',
+      members_count INTEGER DEFAULT 0,
+      activity_score REAL DEFAULT 0,
+      territory_ref TEXT,
+      retention_rate REAL DEFAULT 0,
+      status TEXT DEFAULT 'ATIVO',
+      last_activity_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS campaign_programming_topics (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      content TEXT NOT NULL,
+      author_id TEXT,
+      votes INTEGER DEFAULT 0,
+      answers_count INTEGER DEFAULT 0,
+      is_solved INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id),
+      FOREIGN KEY(author_id) REFERENCES volunteers(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS campaign_integrations (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      category TEXT NOT NULL,
+      integration_type TEXT NOT NULL,
+      status TEXT DEFAULT 'DESCONECTADA',
+      owner_role TEXT,
+      sync_health REAL DEFAULT 0,
+      records_24h INTEGER DEFAULT 0,
+      avg_latency_ms REAL DEFAULT 0,
+      error_rate REAL DEFAULT 0,
+      last_sync_at DATETIME,
+      webhook_url TEXT,
+      metadata_json TEXT DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS candidate_agenda (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      agenda_type TEXT NOT NULL,
+      priority TEXT DEFAULT 'MEDIA',
+      status TEXT DEFAULT 'PENDENTE',
+      due_at DATETIME,
+      source_entity TEXT,
+      source_id TEXT,
+      notes TEXT,
+      created_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id),
+      FOREIGN KEY(created_by) REFERENCES volunteers(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS campaign_hierarchical_messages (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      sender_role TEXT NOT NULL,
+      target_role TEXT NOT NULL,
+      recipient_id TEXT,
+      urgency TEXT DEFAULT 'NORMAL',
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      context_payload TEXT DEFAULT '{}',
+      read_by_recipient INTEGER DEFAULT 0,
+      read_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(campaign_id) REFERENCES campaigns(id),
+      FOREIGN KEY(sender_id) REFERENCES volunteers(id),
+      FOREIGN KEY(recipient_id) REFERENCES volunteers(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_campaign_social_metrics_campaign_day
+      ON campaign_social_metrics(campaign_id, collected_at);
+    CREATE INDEX IF NOT EXISTS idx_campaign_leads_campaign_status
+      ON campaign_leads(campaign_id, status, entered_at);
+    CREATE INDEX IF NOT EXISTS idx_campaign_whatsapp_groups_campaign
+      ON campaign_whatsapp_groups(campaign_id, status);
+    CREATE INDEX IF NOT EXISTS idx_candidate_agenda_campaign_due
+      ON candidate_agenda(campaign_id, status, due_at);
+    CREATE INDEX IF NOT EXISTS idx_campaign_timeline_events_campaign
+      ON campaign_timeline_events(campaign_id, event_at);
+    CREATE INDEX IF NOT EXISTS idx_campaign_programming_topics_campaign
+      ON campaign_programming_topics(campaign_id, category, is_solved);
+    CREATE INDEX IF NOT EXISTS idx_campaign_integrations_campaign
+      ON campaign_integrations(campaign_id, category, status);
+    CREATE INDEX IF NOT EXISTS idx_campaign_hierarchical_messages_campaign
+      ON campaign_hierarchical_messages(campaign_id, target_role, created_at);
     CREATE INDEX IF NOT EXISTS idx_dados_eleitorais_estado
       ON dados_eleitorais(estado);
     CREATE INDEX IF NOT EXISTS idx_dados_demograficos_estado
@@ -494,6 +660,7 @@ export function setupDb() {
   ensureAccessBindings();
 
   seedDemoEcosystem(db);
+  seedCampaignOperatingSystem();
   ensureAccessBindings();
 }
 
@@ -541,7 +708,7 @@ function ensureAccessBindings() {
     const role = (user.role || 'VOLUNTARIO').toUpperCase();
     const isPreCandidate = role === 'PRE_CANDIDATO' || role.startsWith('PRE_CANDIDATO_');
 
-    if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'ADMIN_NACIONAL') {
+    if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'ADMIN_NACIONAL' || role === 'DIRECAO_PARTIDARIA') {
       ensureBinding(user.id, 'ADMIN_NACIONAL', 'NACIONAL', null);
       continue;
     }
@@ -564,7 +731,7 @@ function ensureAccessBindings() {
       continue;
     }
 
-    if (role === 'CHEFE_CAMPANHA' || role === 'COORDENADOR_CAMPANHA') {
+    if (role === 'CHEFE_CAMPANHA' || role === 'COORDENADOR_CAMPANHA' || role === 'CHEFE_REDES' || role === 'CHEFE_LEADS' || role === 'CHEFE_PROGRAMACAO') {
       ensureBinding(
         user.id,
         role,
@@ -573,7 +740,13 @@ function ensureAccessBindings() {
       );
       continue;
     }
-
+    if (role === 'CANDIDATO') {
+      if (user.state) {
+        ensureBinding(user.id, 'CANDIDATO', 'ESTADUAL', user.state.toUpperCase());
+      }
+      ensureBinding(user.id, 'CANDIDATO', 'PROPRIO_USUARIO', user.id);
+      continue;
+    }
     if (role === 'LIDER_SETOR' || role === 'MEMBRO_SETOR') {
       if (user.state) {
         ensureBinding(user.id, role, 'ESTADUAL', user.state.toUpperCase());
@@ -582,14 +755,20 @@ function ensureAccessBindings() {
       continue;
     }
 
-    if (role === 'COORDENADOR_MUNICIPAL' || role === 'ADMIN_REGIONAL') {
+    if (role === 'COORDENADOR_MUNICIPAL' || role === 'ADMIN_REGIONAL' || role === 'COORDENADOR_TERRITORIAL') {
       ensureBinding(user.id, 'ADMIN_REGIONAL', 'MUNICIPAL', user.city ?? null);
       if (user.state) {
         ensureBinding(user.id, 'ADMIN_REGIONAL', 'ESTADUAL', user.state.toUpperCase());
       }
       continue;
     }
-
+    if (role === 'OPERADOR_AREA') {
+      if (user.state) {
+        ensureBinding(user.id, 'OPERADOR_AREA', 'ESTADUAL', user.state.toUpperCase());
+      }
+      ensureBinding(user.id, 'OPERADOR_AREA', 'PROPRIO_USUARIO', user.id);
+      continue;
+    }
     if (role === 'LIDER_EMERGENTE' || role === 'MILITANTE') {
       ensureBinding(user.id, 'MILITANTE', 'PROPRIO_USUARIO', user.id);
       continue;
@@ -918,3 +1097,529 @@ function seedInteligenciaEleitoral() {
 
 
 
+
+
+
+function seedCampaignOperatingSystem() {
+  const campaign = db
+    .prepare('SELECT id, candidate_name FROM campaigns ORDER BY created_at ASC LIMIT 1')
+    .get() as { id: string; candidate_name: string } | undefined;
+
+  if (!campaign) return;
+
+  const sender = db
+    .prepare(
+      `SELECT id, role
+       FROM volunteers
+       WHERE UPPER(COALESCE(role, '')) IN (
+         'CHEFE_CAMPANHA',
+         'COORDENADOR_CAMPANHA',
+         'COORDENADOR_ESTADUAL',
+         'ADMIN',
+         'ADMIN_NACIONAL'
+       )
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    )
+    .get() as { id: string; role: string } | undefined;
+
+  const fallbackUser = db
+    .prepare('SELECT id, role FROM volunteers ORDER BY created_at ASC LIMIT 1')
+    .get() as { id: string; role: string } | undefined;
+
+  const actor = sender ?? fallbackUser;
+  if (!actor) return;
+
+  const candidate = db
+    .prepare(
+      `SELECT id
+       FROM volunteers
+       WHERE UPPER(COALESCE(role, '')) IN ('CANDIDATO', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA')
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    )
+    .get() as { id: string } | undefined;
+
+  const socialCount = db
+    .prepare('SELECT count(*) as count FROM campaign_social_metrics WHERE campaign_id = ?')
+    .get(campaign.id) as { count: number };
+
+  if (socialCount.count === 0) {
+    const socialInsert = db.prepare(
+      `INSERT INTO campaign_social_metrics (
+        id, campaign_id, collected_at, media_type, platform, format, demographic_group, hour_slot,
+        reach, impressions, engagements, comments, shares, saves, followers_growth,
+        spend, clicks, leads, conversions, cpc, cpm, ctr, cpl, cost_per_supporter, cost_per_volunteer
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    const days = 10;
+    const channels = [
+      { mediaType: 'ORGANICA', platform: 'Instagram', format: 'Reels', demographic: '18-34' },
+      { mediaType: 'ORGANICA', platform: 'TikTok', format: 'Video Curto', demographic: '16-24' },
+      { mediaType: 'ORGANICA', platform: 'Facebook', format: 'Carrossel', demographic: '35-54' },
+      { mediaType: 'PAGA', platform: 'Instagram', format: 'Reels Ads', demographic: '18-34' },
+      { mediaType: 'PAGA', platform: 'Meta Ads', format: 'Lead Form', demographic: '25-44' },
+    ];
+
+    for (let day = days; day >= 0; day -= 1) {
+      const dayDate = new Date();
+      dayDate.setDate(dayDate.getDate() - day);
+
+      channels.forEach((channel, index) => {
+        const impressions = 1800 + day * 110 + index * 260;
+        const reach = Math.round(impressions * (0.72 + (index % 2) * 0.06));
+        const clicks = Math.round(impressions * (0.015 + index * 0.003));
+        const engagements = Math.round(reach * (0.07 + (index % 3) * 0.01));
+        const leads = channel.mediaType === 'PAGA' ? Math.max(2, Math.round(clicks * 0.11)) : Math.max(1, Math.round(clicks * 0.04));
+        const conversions = channel.mediaType === 'PAGA' ? Math.max(1, Math.round(leads * 0.42)) : Math.max(1, Math.round(leads * 0.27));
+        const spend = channel.mediaType === 'PAGA' ? Number((220 + day * 9 + index * 17).toFixed(2)) : 0;
+        const cpc = clicks > 0 ? Number((spend / clicks).toFixed(2)) : 0;
+        const cpm = impressions > 0 ? Number(((spend / impressions) * 1000).toFixed(2)) : 0;
+        const ctr = impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(2)) : 0;
+        const cpl = leads > 0 ? Number((spend / leads).toFixed(2)) : 0;
+
+        socialInsert.run(
+          `soc-${campaign.id}-${day}-${index}`,
+          campaign.id,
+          dayDate.toISOString(),
+          channel.mediaType,
+          channel.platform,
+          channel.format,
+          channel.demographic,
+          8 + index * 2,
+          reach,
+          impressions,
+          engagements,
+          Math.round(engagements * 0.22),
+          Math.round(engagements * 0.17),
+          Math.round(engagements * 0.12),
+          channel.mediaType === 'ORGANICA' ? Math.max(3, Math.round(engagements * 0.08)) : 0,
+          spend,
+          clicks,
+          leads,
+          conversions,
+          cpc,
+          cpm,
+          ctr,
+          cpl,
+          conversions > 0 ? Number((spend / conversions).toFixed(2)) : 0,
+          leads > 0 ? Number((spend / leads).toFixed(2)) : 0,
+        );
+      });
+    }
+  }
+
+  const integrationsCount = db
+    .prepare('SELECT count(*) as count FROM campaign_integrations WHERE campaign_id = ?')
+    .get(campaign.id) as { count: number };
+  if (integrationsCount.count === 0) {
+    const integrationInsert = db.prepare(
+      `INSERT INTO campaign_integrations (
+        id, campaign_id, name, provider, category, integration_type, status, owner_role,
+        sync_health, records_24h, avg_latency_ms, error_rate, last_sync_at, webhook_url, metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    const integrations = [
+      {
+        id: 'int-meta-ads',
+        name: 'Meta Ads Manager',
+        provider: 'Meta',
+        category: 'MIDIA_DIGITAL',
+        integrationType: 'API',
+        status: 'ATIVA',
+        ownerRole: 'CHEFE_REDES',
+        syncHealth: 93,
+        records24h: 842,
+        avgLatencyMs: 410,
+        errorRate: 0.8,
+        hoursAgo: 1,
+        webhookUrl: null,
+        metadata: { scopes: ['ads_read', 'pages_read_engagement'], account: 'Ludymilla 2026' },
+      },
+      {
+        id: 'int-google-ads',
+        name: 'Google Ads',
+        provider: 'Google',
+        category: 'MIDIA_DIGITAL',
+        integrationType: 'API',
+        status: 'ATIVA',
+        ownerRole: 'CHEFE_REDES',
+        syncHealth: 88,
+        records24h: 517,
+        avgLatencyMs: 515,
+        errorRate: 1.3,
+        hoursAgo: 2,
+        webhookUrl: null,
+        metadata: { conversionAction: 'lead_form_submit' },
+      },
+      {
+        id: 'int-tiktok-ads',
+        name: 'TikTok Ads',
+        provider: 'TikTok',
+        category: 'MIDIA_DIGITAL',
+        integrationType: 'API',
+        status: 'ATENCAO',
+        ownerRole: 'CHEFE_REDES',
+        syncHealth: 67,
+        records24h: 209,
+        avgLatencyMs: 780,
+        errorRate: 4.9,
+        hoursAgo: 5,
+        webhookUrl: null,
+        metadata: { alert: 'Token expira em 3 dias' },
+      },
+      {
+        id: 'int-whatsapp-cloud',
+        name: 'WhatsApp Cloud API',
+        provider: 'Meta',
+        category: 'MIDIA_DIGITAL',
+        integrationType: 'WEBHOOK',
+        status: 'ATIVA',
+        ownerRole: 'CHEFE_LEADS',
+        syncHealth: 91,
+        records24h: 1244,
+        avgLatencyMs: 240,
+        errorRate: 0.6,
+        hoursAgo: 1,
+        webhookUrl: 'https://hooks.missao.local/whatsapp',
+        metadata: { botFlow: 'captacao-e-reengajamento' },
+      },
+      {
+        id: 'int-n8n',
+        name: 'n8n Campaign Automations',
+        provider: 'n8n',
+        category: 'SISTEMA_EXTERNO',
+        integrationType: 'WEBHOOK',
+        status: 'ATIVA',
+        ownerRole: 'CHEFE_PROGRAMACAO',
+        syncHealth: 95,
+        records24h: 372,
+        avgLatencyMs: 180,
+        errorRate: 0.4,
+        hoursAgo: 0,
+        webhookUrl: 'https://hooks.missao.local/n8n',
+        metadata: { flows: ['lead-score-update', 'candidate-agenda-sync'] },
+      },
+      {
+        id: 'int-rd-station',
+        name: 'RD Station CRM',
+        provider: 'RD Station',
+        category: 'CRM_AUTOMACAO',
+        integrationType: 'API',
+        status: 'ATIVA',
+        ownerRole: 'CHEFE_LEADS',
+        syncHealth: 84,
+        records24h: 436,
+        avgLatencyMs: 460,
+        errorRate: 1.8,
+        hoursAgo: 2,
+        webhookUrl: null,
+        metadata: { pipeline: 'funil-politico-2026' },
+      },
+      {
+        id: 'int-looker',
+        name: 'Looker Studio',
+        provider: 'Google',
+        category: 'ANALYTICS',
+        integrationType: 'NATIVE',
+        status: 'ATENCAO',
+        ownerRole: 'CHEFE_CAMPANHA',
+        syncHealth: 74,
+        records24h: 98,
+        avgLatencyMs: 680,
+        errorRate: 3.1,
+        hoursAgo: 9,
+        webhookUrl: null,
+        metadata: { dashboard: 'executive-campaign-health' },
+      },
+      {
+        id: 'int-planilha-campo',
+        name: 'Google Sheets Campo',
+        provider: 'Google Sheets',
+        category: 'SISTEMA_EXTERNO',
+        integrationType: 'MANUAL',
+        status: 'DESCONECTADA',
+        ownerRole: 'COORDENADOR_TERRITORIAL',
+        syncHealth: 22,
+        records24h: 0,
+        avgLatencyMs: 0,
+        errorRate: 0,
+        hoursAgo: 48,
+        webhookUrl: null,
+        metadata: { note: 'Importacao manual pendente' },
+      },
+    ];
+    for (const integration of integrations) {
+      const lastSync = new Date();
+      lastSync.setHours(lastSync.getHours() - integration.hoursAgo);
+      integrationInsert.run(
+        `${integration.id}-${campaign.id}`,
+        campaign.id,
+        integration.name,
+        integration.provider,
+        integration.category,
+        integration.integrationType,
+        integration.status,
+        integration.ownerRole,
+        integration.syncHealth,
+        integration.records24h,
+        integration.avgLatencyMs,
+        integration.errorRate,
+        integration.hoursAgo > 24 ? null : lastSync.toISOString(),
+        integration.webhookUrl,
+        JSON.stringify(integration.metadata),
+      );
+    }
+  }
+  const leadsCount = db
+    .prepare('SELECT count(*) as count FROM campaign_leads WHERE campaign_id = ?')
+    .get(campaign.id) as { count: number };
+
+  if (leadsCount.count === 0) {
+    const leadInsert = db.prepare(
+      `INSERT INTO campaign_leads (
+        id, campaign_id, name, phone, city, state, neighborhood, source, interest, tags,
+        status, engagement_level, entered_at, last_status_at, territory_ref
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    const statuses = [
+      'VISITANTE',
+      'INTERESSADO',
+      'SIMPATIZANTE',
+      'APOIADOR',
+      'VOLUNTARIO',
+      'ATIVISTA',
+      'MULTIPLICADOR',
+      'LIDERANCA_LOCAL',
+    ];
+
+    const sources = [
+      'Instagram organico',
+      'Instagram pago',
+      'Facebook',
+      'TikTok',
+      'WhatsApp',
+      'Formulario do site',
+      'QR Code',
+      'Evento presencial',
+      'Indicacao',
+      'Acao de rua',
+      'Cadastro manual',
+    ];
+
+    for (let i = 1; i <= 45; i += 1) {
+      const status = statuses[(i - 1) % statuses.length];
+      const source = sources[(i - 1) % sources.length];
+      const entered = new Date();
+      entered.setDate(entered.getDate() - (i % 22));
+
+      leadInsert.run(
+        `lead-${campaign.id}-${i}`,
+        campaign.id,
+        `Lead ${i}`,
+        `1199${String(100000 + i).slice(0, 6)}`,
+        i % 3 === 0 ? 'Sao Paulo' : i % 3 === 1 ? 'Guarulhos' : 'Osasco',
+        'SP',
+        i % 2 === 0 ? 'Centro' : 'Zona Norte',
+        source,
+        i % 4 === 0 ? 'voluntariado' : i % 4 === 1 ? 'evento com candidato' : 'conteudo politico',
+        JSON.stringify(i % 2 === 0 ? ['juventude', 'digital'] : ['territorio']),
+        status,
+        Math.max(15, 92 - i),
+        entered.toISOString(),
+        entered.toISOString(),
+        i % 3 === 0 ? 'capital' : 'grande-sp',
+      );
+    }
+  }
+
+  const groupsCount = db
+    .prepare('SELECT count(*) as count FROM campaign_whatsapp_groups WHERE campaign_id = ?')
+    .get(campaign.id) as { count: number };
+
+  if (groupsCount.count === 0) {
+    const groupsInsert = db.prepare(
+      `INSERT INTO campaign_whatsapp_groups (
+        id, campaign_id, name, admins_json, members_count, activity_score, territory_ref, retention_rate, status, last_activity_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    const groups = [
+      ['wpp-zona-norte', 'Coordenacao Zona Norte', ['coord.sp@missao.com.br'], 186, 84, 'zona-norte', 78.2, 'ATIVO'],
+      ['wpp-jovens', 'Juventude Digital', ['lider.tech@missao.com.br'], 242, 91, 'capital', 73.4, 'ATIVO'],
+      ['wpp-capitacao', 'Captacao de Voluntarios', ['rh@campanha.local'], 128, 66, 'metropolitana', 69.1, 'ATENCAO'],
+      ['wpp-campo', 'Mobilizacao de Campo', ['campo@campanha.local'], 97, 57, 'interior', 62.5, 'RISCO'],
+    ] as Array<[string, string, string[], number, number, string, number, string]>;
+
+    for (const group of groups) {
+      groupsInsert.run(
+        group[0],
+        campaign.id,
+        group[1],
+        JSON.stringify(group[2]),
+        group[3],
+        group[4],
+        group[5],
+        group[6],
+        group[7],
+        new Date().toISOString(),
+      );
+    }
+  }
+
+  const timelineCount = db
+    .prepare('SELECT count(*) as count FROM campaign_timeline_events WHERE campaign_id = ?')
+    .get(campaign.id) as { count: number };
+
+  if (timelineCount.count === 0) {
+    const timelineInsert = db.prepare(
+      `INSERT INTO campaign_timeline_events (
+        id, campaign_id, event_type, severity, source_area, title, description, status, event_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    const events = [
+      ['evt-001', 'ALERTA', 'CRITICO', 'Leads', 'Queda no CPL acima de 18%', 'Canal Instagram pago com aumento de custo nas ultimas 48h.', 'ABERTO', -2],
+      ['evt-002', 'ENTREGA', 'INFO', 'Programacao', 'Automacao de roteiros publicada', 'Fluxo de aprovacao de conteudo conectado ao cronograma do candidato.', 'RESOLVIDO', -1],
+      ['evt-003', 'MOBILIZACAO', 'ATENCAO', 'Voluntariado', 'Cidade sem coordenacao ativa', 'Necessidade de lider local para cobertura da Zona Leste.', 'ABERTO', 0],
+      ['evt-004', 'REDE', 'INFO', 'Redes', 'Post com maior score da semana', 'Reels de agenda bateu benchmark de engajamento do estado.', 'ABERTO', -3],
+    ] as Array<[string, string, string, string, string, string, string, number]>;
+
+    for (const event of events) {
+      const eventDate = new Date();
+      eventDate.setDate(eventDate.getDate() + event[7]);
+
+      timelineInsert.run(
+        `${event[0]}-${campaign.id}`,
+        campaign.id,
+        event[1],
+        event[2],
+        event[3],
+        event[4],
+        event[5],
+        event[6],
+        eventDate.toISOString(),
+      );
+    }
+  }
+
+  const forumCount = db
+    .prepare('SELECT count(*) as count FROM campaign_programming_topics WHERE campaign_id = ?')
+    .get(campaign.id) as { count: number };
+
+  if (forumCount.count === 0) {
+    const forumInsert = db.prepare(
+      `INSERT INTO campaign_programming_topics (
+        id, campaign_id, title, category, content, author_id, votes, answers_count, is_solved
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    const topics = [
+      ['topic-001', 'Integracao n8n para reengajamento de leads frios', 'automacoes', 'Fluxo com gatilho por inatividade de 7 dias e mensagem segmentada por origem.', 18, 6, 1],
+      ['topic-002', 'Estrategia de permissao para chefe de redes em multiplas campanhas', 'permissoes', 'Sugestao de binding por campanha + setor para evitar vazamento de dados.', 14, 5, 1],
+      ['topic-003', 'Observabilidade de conversao de criativos pagos', 'analytics', 'Modelo de evento unico para CPC, CPM, CTR e CPL por criativo.', 11, 3, 0],
+      ['topic-004', 'Padrao de UI para dashboard executivo mobile', 'ux_ui', 'Cards hierarquicos com alertas e sem ruido de operacao tecnica.', 8, 2, 0],
+    ] as Array<[string, string, string, string, number, number, number]>;
+
+    for (const topic of topics) {
+      forumInsert.run(
+        `${topic[0]}-${campaign.id}`,
+        campaign.id,
+        topic[1],
+        topic[2],
+        topic[3],
+        actor.id,
+        topic[4],
+        topic[5],
+        topic[6],
+      );
+    }
+  }
+
+  const agendaCount = db
+    .prepare('SELECT count(*) as count FROM candidate_agenda WHERE campaign_id = ?')
+    .get(campaign.id) as { count: number };
+
+  if (agendaCount.count === 0) {
+    const agendaInsert = db.prepare(
+      `INSERT INTO candidate_agenda (
+        id, campaign_id, title, agenda_type, priority, status, due_at, source_entity, source_id, notes, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+
+    const now = new Date();
+    const agendaItems = [
+      {
+        id: 'cand-001',
+        title: 'Gravar video para pauta de saude',
+        type: 'GRAVACAO',
+        priority: 'ALTA',
+        status: 'PENDENTE',
+        offsetDays: 1,
+        notes: 'Roteiro aprovado por Redes e Chefe de Campanha.',
+      },
+      {
+        id: 'cand-002',
+        title: 'Aprovar cards da semana eleitoral',
+        type: 'APROVACAO',
+        priority: 'MEDIA',
+        status: 'PENDENTE',
+        offsetDays: 2,
+        notes: 'Material preparado no fluxo de comunicacao escalonada.',
+      },
+      {
+        id: 'cand-003',
+        title: 'Confirmar agenda de evento territorial',
+        type: 'EVENTO',
+        priority: 'ALTA',
+        status: 'PENDENTE',
+        offsetDays: 3,
+        notes: 'Reuniao com liderancas locais e grupo de campo.',
+      },
+    ];
+
+    for (const item of agendaItems) {
+      const due = new Date(now);
+      due.setDate(now.getDate() + item.offsetDays);
+
+      agendaInsert.run(
+        `${item.id}-${campaign.id}`,
+        campaign.id,
+        item.title,
+        item.type,
+        item.priority,
+        item.status,
+        due.toISOString(),
+        'campaign_tasks',
+        null,
+        item.notes,
+        candidate?.id ?? actor.id,
+      );
+    }
+  }
+
+  const messagesCount = db
+    .prepare('SELECT count(*) as count FROM campaign_hierarchical_messages WHERE campaign_id = ?')
+    .get(campaign.id) as { count: number };
+
+  if (messagesCount.count === 0) {
+    db.prepare(
+      `INSERT INTO campaign_hierarchical_messages (
+        id, campaign_id, sender_id, sender_role, target_role, recipient_id, urgency, title, message, context_payload
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      `msg-welcome-${campaign.id}`,
+      campaign.id,
+      actor.id,
+      actor.role,
+      'CHEFE_REDES',
+      null,
+      'ALTA',
+      'Alinhamento de semana critica',
+      'Priorizar criativos com melhor CPL e reforcar rotina de aprovacao com o candidato.',
+      JSON.stringify({ area: 'redes', rastreavel: true, criado_por_seed: true }),
+    );
+  }
+}

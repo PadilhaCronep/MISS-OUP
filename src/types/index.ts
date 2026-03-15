@@ -1,15 +1,22 @@
-﻿export type UserRole =
+export type UserRole =
   | 'SUPER_ADMIN'
   | 'ADMIN'
   | 'ADMIN_NACIONAL'
+  | 'DIRECAO_PARTIDARIA'
   | 'ADMIN_ESTADUAL'
   | 'ADMIN_REGIONAL'
   | 'PRE_CANDIDATO'
+  | 'CANDIDATO'
   | 'CHEFE_CAMPANHA'
+  | 'CHEFE_REDES'
+  | 'CHEFE_LEADS'
+  | 'CHEFE_PROGRAMACAO'
   | 'COORDENADOR_CAMPANHA'
+  | 'COORDENADOR_TERRITORIAL'
   | 'COORDENADOR_ESTADUAL'
   | 'COORDENADOR_MUNICIPAL'
   | 'LIDER_SETOR'
+  | 'OPERADOR_AREA'
   | 'MEMBRO_SETOR'
   | 'LIDER_EMERGENTE'
   | 'MILITANTE'
@@ -134,3 +141,4 @@ export interface Notification {
   is_read: number;
   created_at: string;
 }
+

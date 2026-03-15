@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './components/AuthContext.tsx';
 import { Layout } from './components/Layout.tsx';
 import { ScrollToTop } from './components/layout/ScrollToTop.tsx';
+import { CANDIDATE_PANEL_ROLES, COORDINATION_ROLES } from './lib/role-groups.ts';
+import { getRoleHomePath } from './lib/navigation.ts';
 
 const Onboarding = lazy(() => import('./pages/Onboarding.tsx').then((m) => ({ default: m.Onboarding })));
 const Dashboard = lazy(() => import('./pages/Dashboard.tsx').then((m) => ({ default: m.Dashboard })));
@@ -11,6 +13,7 @@ const BadgesPage = lazy(() => import('./pages/Badges.tsx').then((m) => ({ defaul
 const AdminAccess = lazy(() => import('./pages/AdminAccess.tsx').then((m) => ({ default: m.AdminAccess })));
 const EngajamentoHub = lazy(() => import('./pages/EngajamentoHub.tsx').then((m) => ({ default: m.EngajamentoHub })));
 const GuiaInicial = lazy(() => import('./pages/GuiaInicial.tsx').then((m) => ({ default: m.GuiaInicial })));
+const CandidatePanel = lazy(() => import('./pages/CandidatePanel.tsx').then((m) => ({ default: m.CandidatePanel })));
 
 const TrainingHub = lazy(() => import('./pages/voluntario/formacao/Hub.tsx').then((m) => ({ default: m.TrainingHub })));
 const TrackDetails = lazy(() => import('./pages/voluntario/formacao/TrackDetails.tsx').then((m) => ({ default: m.TrackDetails })));
@@ -21,6 +24,11 @@ const CampaignHub = lazy(() => import('./pages/voluntario/CampaignHub.tsx').then
 
 const CoordinatorLayout = lazy(() => import('./pages/coordinator/CoordinatorLayout.tsx').then((m) => ({ default: m.CoordinatorLayout })));
 const CoordinatorDashboard = lazy(() => import('./pages/coordinator/Dashboard.tsx').then((m) => ({ default: m.CoordinatorDashboard })));
+const CampaignCommandCenter = lazy(() => import('./pages/coordinator/CampaignCommandCenter.tsx').then((m) => ({ default: m.CampaignCommandCenter })));
+const NetworksIntelligence = lazy(() => import('./pages/coordinator/NetworksIntelligence.tsx').then((m) => ({ default: m.NetworksIntelligence })));
+const LeadsCrmDashboard = lazy(() => import('./pages/coordinator/LeadsCrmDashboard.tsx').then((m) => ({ default: m.LeadsCrmDashboard })));
+const IntegrationsHub = lazy(() => import('./pages/coordinator/IntegrationsHub.tsx').then((m) => ({ default: m.IntegrationsHub })));
+const ProgrammingChiefDashboard = lazy(() => import('./pages/coordinator/ProgrammingChiefDashboard.tsx').then((m) => ({ default: m.ProgrammingChiefDashboard })));
 const VolunteersList = lazy(() => import('./pages/coordinator/VolunteersList.tsx').then((m) => ({ default: m.VolunteersList })));
 const VolunteerProfile = lazy(() => import('./pages/coordinator/VolunteerProfile.tsx').then((m) => ({ default: m.VolunteerProfile })));
 const MissionsManagement = lazy(() => import('./pages/coordinator/MissionsManagement.tsx').then((m) => ({ default: m.MissionsManagement })));
@@ -41,12 +49,19 @@ const RouteFallback: React.FC = () => (
 const ProtectedRoute = ({ children, roles }: { children: React.ReactNode; roles?: string[] }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/onboarding" />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/" />;
+  if (roles && !roles.includes(user.role)) return <Navigate to={getRoleHomePath(user.role)} replace />;
   return <>{children}</>;
 };
 
+const RoleHome: React.FC = () => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/onboarding" replace />;
+  return <Navigate to={getRoleHomePath(user.role)} replace />;
+};
+
 export default function App() {
-  const coordinatorRoles = ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'];
+  const coordinatorRoles = [...COORDINATION_ROLES];
+  const candidatePanelRoles = [...CANDIDATE_PANEL_ROLES];
 
   return (
     <AuthProvider>
@@ -57,12 +72,14 @@ export default function App() {
             <Routes>
               <Route path="/onboarding" element={<Onboarding />} />
               <Route path="/acesso-admin" element={<AdminAccess />} />
+              <Route path="/inicio" element={<ProtectedRoute><RoleHome /></ProtectedRoute>} />
               <Route path="/" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/engajamento" element={<ProtectedRoute><EngajamentoHub /></ProtectedRoute>} />
               <Route path="/guia-inicial" element={<ProtectedRoute><GuiaInicial /></ProtectedRoute>} />
               <Route path="/map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
               <Route path="/badges" element={<ProtectedRoute><BadgesPage /></ProtectedRoute>} />
+              <Route path="/candidato" element={<ProtectedRoute roles={candidatePanelRoles}><CandidatePanel /></ProtectedRoute>} />
 
               <Route path="/voluntario/formacao" element={<ProtectedRoute><TrainingHub /></ProtectedRoute>} />
               <Route path="/voluntario/formacao/trilha/:trilhaId" element={<ProtectedRoute><TrackDetails /></ProtectedRoute>} />
@@ -81,6 +98,55 @@ export default function App() {
                   <ProtectedRoute roles={coordinatorRoles}>
                     <CoordinatorLayout>
                       <CoordinatorDashboard />
+                    </CoordinatorLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/coordinator/command"
+                element={
+                  <ProtectedRoute roles={coordinatorRoles}>
+                    <CoordinatorLayout>
+                      <CampaignCommandCenter />
+                    </CoordinatorLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/coordinator/redes"
+                element={
+                  <ProtectedRoute roles={coordinatorRoles}>
+                    <CoordinatorLayout>
+                      <NetworksIntelligence />
+                    </CoordinatorLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/coordinator/leads"
+                element={
+                  <ProtectedRoute roles={coordinatorRoles}>
+                    <CoordinatorLayout>
+                      <LeadsCrmDashboard />
+                    </CoordinatorLayout>
+                  </ProtectedRoute>
+                }
+              />              <Route
+                path="/coordinator/integracoes"
+                element={
+                  <ProtectedRoute roles={coordinatorRoles}>
+                    <CoordinatorLayout>
+                      <IntegrationsHub />
+                    </CoordinatorLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/coordinator/programacao"
+                element={
+                  <ProtectedRoute roles={coordinatorRoles}>
+                    <CoordinatorLayout>
+                      <ProgrammingChiefDashboard />
                     </CoordinatorLayout>
                   </ProtectedRoute>
                 }
@@ -195,4 +261,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-

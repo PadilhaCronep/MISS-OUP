@@ -8,12 +8,15 @@ interface BreadcrumbItem {
 }
 
 const labelMap: Record<string, string> = {
+  inicio: 'Minha Visao',
   onboarding: 'Onboarding',
   'acesso-admin': 'Acesso Admin',
+  dashboard: 'Dashboard',
   map: 'Mapa',
   engajamento: 'Engajamento',
   'guia-inicial': 'Guia Inicial',
   badges: 'Conquistas',
+  candidato: 'Painel Candidato',
   voluntario: 'Voluntario',
   formacao: 'Formacao',
   trilha: 'Trilha',
@@ -21,6 +24,11 @@ const labelMap: Record<string, string> = {
   certificados: 'Certificados',
   funcao: 'Minha Funcao',
   coordinator: 'Coordenacao',
+  command: 'Comando',
+  redes: 'Redes',
+  leads: 'Leads CRM',
+  integracoes: 'Integracoes',
+  programacao: 'Programacao',
   volunteers: 'Voluntarios',
   missions: 'Missoes',
   territories: 'Territorios',
@@ -42,7 +50,7 @@ const toLabel = (segment: string): string => {
 export const Breadcrumb: React.FC = () => {
   const { pathname } = useLocation();
 
-  if (pathname === '/' || pathname === '/coordinator') {
+  if (pathname === '/' || pathname === '/coordinator' || pathname === '/inicio') {
     return null;
   }
 
@@ -56,12 +64,11 @@ export const Breadcrumb: React.FC = () => {
   return (
     <nav
       aria-label="Localizacao"
-      className={`mb-5 flex items-center gap-2 overflow-x-auto text-xs whitespace-nowrap ${
-        isCoordinator ? 'text-zinc-500' : 'text-zinc-500'
-      }`}
+      className="mb-5 flex items-center gap-2 overflow-x-auto whitespace-nowrap text-xs text-zinc-500"
     >
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
+
         return (
           <React.Fragment key={item.path}>
             {index > 0 ? <ChevronRight className="h-3 w-3 text-zinc-500" /> : null}

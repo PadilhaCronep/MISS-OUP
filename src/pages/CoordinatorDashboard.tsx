@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Users, Target, CheckCircle2, XCircle, AlertTriangle, TrendingUp, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { isCoordinatorRole } from '../lib/role-groups.ts';
 
 export const CoordinatorDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -12,7 +13,7 @@ export const CoordinatorDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (user && ['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'].includes(user.role)) {
+    if (user && isCoordinatorRole(user.role)) {
       fetch(`/api/coordinator/volunteers?state=${user.state}`)
         .then(res => res.json())
         .then(data => setVolunteers(data.volunteers));
@@ -52,7 +53,7 @@ export const CoordinatorDashboard: React.FC = () => {
     v.city.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (!user || !['COORDENADOR_MUNICIPAL', 'COORDENADOR_ESTADUAL', 'ADMIN', 'ADMIN_NACIONAL', 'ADMIN_ESTADUAL', 'ADMIN_REGIONAL', 'PRE_CANDIDATO', 'CHEFE_CAMPANHA', 'COORDENADOR_CAMPANHA', 'LIDER_SETOR'].includes(user.role)) {
+  if (!user || !isCoordinatorRole(user.role)) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center">
         <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
@@ -205,4 +206,5 @@ export const CoordinatorDashboard: React.FC = () => {
     </div>
   );
 };
+
 

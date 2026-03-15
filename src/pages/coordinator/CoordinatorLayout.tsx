@@ -20,6 +20,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../../components/AuthContext.tsx';
 import { Breadcrumb } from '../../components/layout/Breadcrumb.tsx';
 import { apiClient } from '../../lib/api-client.ts';
+import { isCandidatePanelRole } from '../../lib/role-groups.ts';
 
 interface AlertaInteligencia {
   classificacao?: string;
@@ -61,13 +62,19 @@ export const CoordinatorLayout: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const menuItems = useMemo(() => ([
     { icon: LayoutDashboard, label: 'Dashboard', path: '/coordinator' },
+    { icon: LayoutDashboard, label: 'Comando', path: '/coordinator/command' },
+    { icon: BarChart3, label: 'Redes', path: '/coordinator/redes' },
+    { icon: ShieldAlert, label: 'Integracoes', path: '/coordinator/integracoes' },
+    { icon: UserPlus, label: 'Leads CRM', path: '/coordinator/leads' },
+    { icon: Rocket, label: 'Programacao', path: '/coordinator/programacao' },
     { icon: Users, label: 'Voluntarios', path: '/coordinator/volunteers' },
     { icon: Target, label: 'Missoes', path: '/coordinator/missions' },
     { icon: MapIcon, label: 'Territorios', path: '/coordinator/territories' },
     { icon: Brain, label: 'Inteligencia', path: '/coordinator/inteligencia', badge: alertasCriticos > 0 ? alertasCriticos : null },
     { icon: BarChart3, label: 'Relatorios', path: '/coordinator/reports' },
     { icon: Rocket, label: 'Campanhas', path: '/coordinator/campaigns' },
-  ]), [alertasCriticos]);
+    ...(user && isCandidatePanelRole(user.role) ? [{ icon: LayoutDashboard, label: 'Painel Candidato', path: '/candidato' }] : []),
+  ]), [alertasCriticos, user]);
 
   const mobileQuickItems = useMemo(
     () => menuItems.filter((item) => ['/coordinator', '/coordinator/volunteers', '/coordinator/missions', '/coordinator/inteligencia'].includes(item.path)).slice(0, 4),
@@ -186,11 +193,11 @@ export const CoordinatorLayout: React.FC<{ children: React.ReactNode }> = ({ chi
 
         <div className="p-4 border-t border-zinc-800">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/inicio')}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-500 hover:text-white transition-all mb-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="text-xs font-bold">Voltar a plataforma</span>
+            <span className="text-xs font-bold">Ir para minha visao</span>
           </button>
           <button
             onClick={logout}
@@ -218,9 +225,9 @@ export const CoordinatorLayout: React.FC<{ children: React.ReactNode }> = ({ chi
           </div>
 
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/inicio')}
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-100"
-            aria-label="Voltar para plataforma"
+            aria-label="Ir para minha visao"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -289,11 +296,11 @@ export const CoordinatorLayout: React.FC<{ children: React.ReactNode }> = ({ chi
 
                 <div className="space-y-2 border-t border-zinc-800 px-3 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3">
                   <button
-                    onClick={() => navigate('/')}
+                    onClick={() => navigate('/inicio')}
                     className="flex w-full items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-3 text-sm text-zinc-200"
                   >
                     <ArrowLeft className="h-4 w-4" />
-                    Voltar a plataforma
+                    Ir para minha visao
                   </button>
                   <button
                     onClick={logout}
@@ -345,3 +352,4 @@ export const CoordinatorLayout: React.FC<{ children: React.ReactNode }> = ({ chi
     </div>
   );
 };
+
